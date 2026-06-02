@@ -45,18 +45,20 @@ npm install
 npm run build      # or: npm run dev   (runs src directly via tsx)
 npm start          # serves on stdio
 npm run smoke      # end-to-end self-test
-npm run reliability-check  # trading-agent example (see below)
+npm run founder-check  # trading-agent example (see below)
 ```
 
-## Example: a trading agent hires a human for a token reliability check
+## Example: a trading agent hires a human for a founder liveness check
 
-Before an autonomous trader fires a risky buy, it can hire a human through this
-gateway to vet the token, then pay on verify — direct, no escrow. The pattern
-behind x402-native traders like [Bankr](https://bankr.bot) (see
-**[BANKR.md](./BANKR.md)** for that write-up). Run it end to end:
+A trading agent runs every on-chain check itself — but it can't tell whether a
+real person is behind a token (fake / deepfaked founders are the #1 scam). Before
+a risky buy it hires a human through this gateway to **video-verify the founder**,
+then pays on verify — direct, no escrow. The pattern behind x402-native traders
+like [Bankr](https://bankr.bot) (see **[BANKR.md](./BANKR.md)** for the write-up).
+Run it end to end:
 
 ```bash
-npm run build && npm run reliability-check
+npm run build && npm run founder-check
 ```
 
 ## Connect from Claude Code

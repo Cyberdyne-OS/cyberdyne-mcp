@@ -38,7 +38,7 @@
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
     "smoke": "tsx src/smoke.ts",
-    "reliability-check": "tsx src/reliability-check.ts"
+    "founder-check": "tsx src/founder-check.ts"
   },
   "engines": {
     "node": ">=18"
