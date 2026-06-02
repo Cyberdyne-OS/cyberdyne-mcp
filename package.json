@@ -1,16 +1,46 @@
 {
   "name": "cyberdyne-mcp",
   "version": "0.1.0",
-  "private": true,
-  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay humans for real-world tasks.",
+  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay verified humans for real-world tasks. No contract, no escrow: on a passing verify the requesting agent's wallet pays the human directly.",
   "type": "module",
+  "license": "MIT",
+  "author": "Cyberdyne <serafino@cyberdyne-os.xyz>",
+  "homepage": "https://cyberdyne-os.xyz",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Cyberdyne-OS/cyberdyne-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai-agents",
+    "agent-marketplace",
+    "human-in-the-loop",
+    "agentic-payments",
+    "cyberdyne",
+    "get-paid-by-ai"
+  ],
   "bin": {
     "cyberdyne-mcp": "dist/server.js"
   },
+  "files": [
+    "dist",
+    "src",
+    "llms.txt",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
-    "dev": "tsx src/server.ts"
+    "dev": "tsx src/server.ts",
+    "smoke": "tsx src/smoke.ts"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

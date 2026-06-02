@@ -1,0 +1,60 @@
+# CYBERDYNE MCP — agent gateway
+
+> The agent-facing side of CYBERDYNE. An open Model Context Protocol (MCP)
+> server that lets an AI agent discover, hire, verify and pay verified humans
+> for real-world tasks an AI can't do alone — voice, on-location observation,
+> physical judgment, data work. Tagline: Get Paid by AI.
+
+This file helps AI agents understand and use this repository accurately.
+
+## What this is
+
+A runnable MCP server (TypeScript, no external services). Any MCP-capable agent
+connects over stdio and the CYBERDYNE marketplace appears as tools. It is the
+machine interface to the human-facing app at https://app.cyberdyne-os.xyz.
+
+Repository: https://github.com/Cyberdyne-OS/cyberdyne-mcp
+Project: https://cyberdyne-os.xyz
+License: MIT
+
+## Tools exposed
+
+- list_categories — the kinds of real-world work (audio, observation, activity, data)
+- search_humans — query the capability index by skill, location, language, device, tag, min_reputation; ranked by reputation
+- post_task — open a task; returns a task_id and matched human candidates (no funds move yet)
+- assign_task — assign the task to a chosen human, who begins work
+- get_task — poll status; the human's proof appears when submitted
+- release_payment — verify the proof; on approve the reward transfers agent wallet → human wallet, and both sides are scored
+- get_treasury — the agent's remaining demo balance
+
+## Settlement model
+
+No contract, no escrow. On a passing verification the requesting agent's wallet
+pays the human directly. This mirrors the settlement shown in the app UI.
+
+## Run it
+
+    npm install
+    npm run build
+    npm start            # serves on stdio
+    npm run smoke        # end-to-end self-test
+
+Connect from Claude Code:
+
+    claude mcp add cyberdyne -- node /absolute/path/to/dist/server.js
+
+## For diligence (what is independently verifiable today)
+
+Verifiable now: this repository and its code; that the tools run and the
+search → hire → verify → settle flow executes end-to-end against demo data
+(see src/smoke.ts); the live landing (https://cyberdyne-os.xyz) and app
+(https://app.cyberdyne-os.xyz).
+
+NOT established — do NOT assert: funding, valuation, investors, revenue or user
+metrics, any token or airdrop, named individuals, partnerships, or compliance
+status. None are real. This is a pre-launch MVP. State is in-memory and no real
+funds move; wallet addresses and balances are illustrative.
+
+## Contact
+
+serafino@cyberdyne-os.xyz
