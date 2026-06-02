@@ -37,7 +37,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx src/server.ts",
-    "smoke": "tsx src/smoke.ts"
+    "smoke": "tsx src/smoke.ts",
+    "bankr": "tsx src/bankr-example.ts"
   },
   "engines": {
     "node": ">=18"

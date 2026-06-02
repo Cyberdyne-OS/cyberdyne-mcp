@@ -29,7 +29,7 @@ agent's wallet pays the human directly — the same event the app shows on the h
 
 | Tool | What it does |
 |---|---|
-| `list_categories` | The four kinds of real-world work (audio, observation, activity, data). |
+| `list_categories` | The six kinds of work: ground truth, field capture, agent evaluation, expert judgment, demonstrations, data tasks. |
 | `search_humans` | Query the capability index: `skill`, `location`, `language`, `device`, `tag`, `min_reputation`. Ranked by reputation. |
 | `post_task` | Open a task; returns a `task_id` + matched candidate humans. No funds move yet. |
 | `assign_task` | Assign the task to a chosen `human_id`; they begin work. |
@@ -44,6 +44,19 @@ cd cyberdyne-mcp
 npm install
 npm run build      # or: npm run dev   (runs src directly via tsx)
 npm start          # serves on stdio
+npm run smoke      # end-to-end self-test
+npm run bankr      # Bankr integration example (see below)
+```
+
+## Example: Bankr hires a human to rug-check a token
+
+[Bankr](https://bankr.bot) is an x402-native AI trading agent. Before it fires a
+risky buy it can hire a human through this gateway to vet the token, then pay on
+verify — direct, no escrow. See **[BANKR.md](./BANKR.md)** for the integration
+write-up; run it end to end with:
+
+```bash
+npm run build && npm run bankr
 ```
 
 ## Connect from Claude Code

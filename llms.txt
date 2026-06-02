@@ -19,7 +19,7 @@ License: MIT
 
 ## Tools exposed
 
-- list_categories — the kinds of real-world work (audio, observation, activity, data)
+- list_categories — the kinds of work: ground truth, field capture, agent evaluation, expert judgment, demonstrations, data tasks
 - search_humans — query the capability index by skill, location, language, device, tag, min_reputation; ranked by reputation
 - post_task — open a task; returns a task_id and matched human candidates (no funds move yet)
 - assign_task — assign the task to a chosen human, who begins work

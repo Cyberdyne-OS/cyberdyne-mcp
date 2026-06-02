@@ -114,7 +114,7 @@ server.tool(
   "Find verified humans by capability. All filters are optional and combine (AND). Results are ranked by reputation. This is the discovery gateway: query the capability index, get a ranked shortlist with wallets and reputation.",
   {
     skill: z
-      .enum(["audio", "observation", "activity", "data"])
+      .enum(["groundtruth", "capture", "agenteval", "expert", "demo", "data"])
       .optional()
       .describe("A task category the human must be able to do."),
     location: z.string().optional().describe("Substring match on location, e.g. 'ES', 'Tokyo'."),
@@ -149,7 +149,7 @@ server.tool(
   "Open a task on the marketplace and get matched human candidates. Funds are NOT moved yet — payment only happens on release_payment after you verify the proof. Returns a task_id and a ranked shortlist of candidates whose skills match the category.",
   {
     description: z.string().min(3).describe("What you need the human to do."),
-    category: z.enum(["audio", "observation", "activity", "data"]),
+    category: z.enum(["groundtruth", "capture", "agenteval", "expert", "demo", "data"]),
     criteria: z.string().min(3).describe("Acceptance criteria you'll verify the proof against."),
     reward: z.number().positive().describe("Reward in demo USD, paid from your treasury on verify."),
     deadline_hours: z.number().positive().max(168).optional().default(48),

@@ -2,7 +2,7 @@
  * CYBERDYNE human registry (demo data).
  *
  * This mirrors the concepts in the app at cyberdyne-web-desktop/src/data.ts —
- * the same four task categories, the same direct agent→human settlement model,
+ * the same six task categories, the same direct agent→human settlement model,
  * the same illustrative short wallet addresses. In production this would be a
  * real database of verified contributors; here it is an in-memory fixture so an
  * agent can connect over MCP and exercise the full flow end to end.
@@ -10,13 +10,15 @@
  * Nothing here moves real money. Addresses and balances are illustrative.
  */
 
-export type Category = "audio" | "observation" | "activity" | "data";
+export type Category = "groundtruth" | "capture" | "agenteval" | "expert" | "demo" | "data";
 
 export const CATEGORIES: Record<Category, string> = {
-  audio: "Record speech, narration & conversational dialogue",
-  observation: "Capture real-world visual & spatial data on location",
-  activity: "Expert evaluation, inspection & ground-truth verification",
-  data: "Label, rank, judge and verify AI data"
+  groundtruth: "Verify, photograph & ground-truth the real world on location",
+  capture: "Capture real audio, video, image & sensor data",
+  agenteval: "Rate AI-agent runs, tool calls, red-team & safety",
+  expert: "Domain experts review, grade & write hard reasoning data",
+  demo: "Show the AI how — record step-by-step demonstrations",
+  data: "Quick labeling, preference & transcription microtasks"
 };
 
 export interface Human {
@@ -44,8 +46,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-4827",
     handle: "Human #4827",
-    skills: ["audio", "data"],
-    tags: ["narration", "multilingual", "transcription", "ranking"],
+    skills: ["capture", "expert", "data"],
+    tags: ["multilingual", "narration", "translation", "transcription"],
     location: "Barcelona, ES",
     timezone: "Europe/Madrid",
     languages: ["es", "en", "ca"],
@@ -59,8 +61,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-0192",
     handle: "Human #0192",
-    skills: ["observation", "activity"],
-    tags: ["street-photo", "mapping", "ground-truth", "field-visit"],
+    skills: ["groundtruth", "demo"],
+    tags: ["field-visit", "street-photo", "how-to", "ground-truth"],
     location: "Lagos, NG",
     timezone: "Africa/Lagos",
     languages: ["en", "yo"],
@@ -74,8 +76,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-4410",
     handle: "Human #4410",
-    skills: ["data", "activity"],
-    tags: ["labeling", "moderation", "defect-inspection", "judgment"],
+    skills: ["agenteval", "data"],
+    tags: ["agent-eval", "red-team", "preference", "moderation"],
     location: "Manila, PH",
     timezone: "Asia/Manila",
     languages: ["en", "tl"],
@@ -89,8 +91,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-2231",
     handle: "Human #2231",
-    skills: ["audio"],
-    tags: ["expressive-read", "sarcasm", "ambience", "voice-acting"],
+    skills: ["capture", "demo"],
+    tags: ["expressive-read", "voice-acting", "how-to", "ambience"],
     location: "Austin, US",
     timezone: "America/Chicago",
     languages: ["en"],
@@ -104,8 +106,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-7788",
     handle: "Human #7788",
-    skills: ["observation"],
-    tags: ["spatial-walkthrough", "room-mapping", "object-count"],
+    skills: ["groundtruth", "capture"],
+    tags: ["spatial-capture", "street-video", "object-count"],
     location: "São Paulo, BR",
     timezone: "America/Sao_Paulo",
     languages: ["pt", "en"],
@@ -119,8 +121,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-1043",
     handle: "Human #1043",
-    skills: ["activity", "data"],
-    tags: ["sensory", "taste", "smell", "local-verification", "calls"],
+    skills: ["groundtruth", "expert"],
+    tags: ["local-verification", "review", "calls", "sensory"],
     location: "Lyon, FR",
     timezone: "Europe/Paris",
     languages: ["fr", "en"],
@@ -134,12 +136,12 @@ export const HUMANS: Human[] = [
   {
     id: "h-3360",
     handle: "Human #3360",
-    skills: ["data", "audio"],
-    tags: ["handwriting", "transcription", "ranking", "translation"],
+    skills: ["expert", "agenteval", "data"],
+    tags: ["code-review", "reasoning", "swe-bench", "crypto-diligence"],
     location: "Pune, IN",
     timezone: "Asia/Kolkata",
     languages: ["hi", "en", "mr"],
-    devices: ["laptop", "phone"],
+    devices: ["laptop"],
     reputation: 4.85,
     tasksDone: 297,
     responseMins: 5,
@@ -149,8 +151,8 @@ export const HUMANS: Human[] = [
   {
     id: "h-9021",
     handle: "Human #9021",
-    skills: ["observation", "activity"],
-    tags: ["field-visit", "ground-truth", "business-hours", "signage"],
+    skills: ["groundtruth", "demo"],
+    tags: ["field-visit", "ground-truth", "demonstration", "signage"],
     location: "Tokyo, JP",
     timezone: "Asia/Tokyo",
     languages: ["ja", "en"],
@@ -168,4 +170,4 @@ export const HUMANS: Human[] = [
  * START_TREASURY in the app. A real deployment would read the agent's own
  * on-chain wallet balance instead.
  */
-export const AGENT_TREASURY_START = 8420.5;
+export const AGENT_TREASURY_START = 18420.5;
