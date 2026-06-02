@@ -32,7 +32,7 @@ release_payment({ approve: true })                         // verify → pay dir
 On a passing verify the reward transfers **directly** from Bankr's wallet to the human's — the same settlement model x402 implies. A runnable end-to-end example lives in this repo:
 
 ```bash
-npm install && npm run build && npm run bankr
+npm install && npm run build && npm run rug-check
 ```
 
 It searches for an expert, posts a `$PEPE2` rug-check, assigns it, collects the proof, and releases payment — printing the agent→human settlement.

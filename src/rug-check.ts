@@ -1,19 +1,19 @@
 /**
- * Bankr × CYBERDYNE integration example.
+ * Example: a trading agent hires a human to rug-check a token before it buys.
  *
- * Bankr (https://bankr.bot) is an x402-native AI agent that trades and bridges
- * crypto on Base/Solana from natural language on X & Farcaster. Autonomous
- * trading is exposed to scams — so before it fires a risky buy, Bankr hires a
- * human through CYBERDYNE to rug-check the token, then pays directly on a
- * passing verify (no escrow). This drives the full flow end to end.
+ * Autonomous onchain trading is exposed to scams (honeypots, fake LP locks,
+ * whale traps, bot-farmed hype) — judgment calls models are bad at. Before it
+ * fires a risky buy, a trading agent can hire a human through CYBERDYNE to vet
+ * the token, then pay directly on a passing verify (no escrow). This is the
+ * pattern behind e.g. Bankr (https://bankr.bot) and any x402-native trader.
  *
- *   npm run build && npm run bankr        (or: npx tsx src/bankr-example.ts)
+ *   npm run build && npm run rug-check      (or: npx tsx src/rug-check.ts)
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 const transport = new StdioClientTransport({ command: "node", args: ["dist/server.js"] });
-const client = new Client({ name: "bankr", version: "0" });
+const client = new Client({ name: "trading-agent", version: "0" });
 await client.connect(transport);
 
 const call = async (name: string, args: Record<string, unknown> = {}) => {
@@ -21,24 +21,24 @@ const call = async (name: string, args: Record<string, unknown> = {}) => {
   return JSON.parse(r.content[0].text);
 };
 
-const BANKR_WALLET = "0xBNKR…a402";
-console.log("[bankr] connected to CYBERDYNE over MCP\n");
+const AGENT_WALLET = "0xTRADE…a402";
+console.log("[agent] connected to CYBERDYNE over MCP\n");
 
-// 1. Bankr wants a human to vet a low-cap token before buying — find an expert.
+// 1. The agent wants a human to vet a low-cap token before buying — find an expert.
 const found = await call("search_humans", { skill: "expert", min_reputation: 4.8 });
 const human = found.humans[0];
 console.log(`search_humans(expert, min_rep 4.8) -> ${found.count} match`);
 console.log(`  hiring ${human.handle}  ${human.location}  rep ${human.reputation}  ${human.wallet}\n`);
 
-// 2. Post the rug-check, funded from Bankr's treasury. No funds move yet.
+// 2. Post the rug-check, funded from the agent's treasury. No funds move yet.
 const posted = await call("post_task", {
   description:
-    "Rug-check $PEPE2 (0xabc123…) before Bankr buys 2 ETH worth: contract mint/owner authority, LP lock, top-holder concentration, and socials. Return a go / no-go.",
+    "Rug-check $PEPE2 (0xabc123…) before buying 2 ETH worth: contract mint/owner authority, LP lock, top-holder concentration, and socials. Return a go / no-go.",
   category: "expert",
   criteria: "Mint renounced + LP locked >6mo + no holder >5% + real socials => go; otherwise no-go with reasons.",
   reward: 45,
   deadline_hours: 1,
-  agent_wallet: BANKR_WALLET
+  agent_wallet: AGENT_WALLET
 });
 console.log(`post_task -> ${posted.task_id}  reward $${posted.reward}  ${posted.candidates.length} candidates`);
 
@@ -54,7 +54,7 @@ const settled = await call("release_payment", { task_id: posted.task_id, approve
 console.log(
   `release_payment -> ${settled.status}: $${settled.settlement.amount} ${settled.settlement.from} -> ${settled.settlement.to}`
 );
-console.log(`\n[bankr] has a human go/no-go and the contributor is paid. Treasury left: ${settled.treasury_remaining}`);
-console.log("Same x402 / on-chain rails Bankr already uses — settlement is direct, no escrow.");
+console.log(`\n[agent] has a human go/no-go and the contributor is paid. Treasury left: ${settled.treasury_remaining}`);
+console.log("Direct settlement, no escrow — the same x402 / on-chain rails the agent already uses.");
 
 await client.close();
