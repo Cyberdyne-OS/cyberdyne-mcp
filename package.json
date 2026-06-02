@@ -1,0 +1,23 @@
+{
+  "name": "cyberdyne-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay humans for real-world tasks.",
+  "type": "module",
+  "bin": {
+    "cyberdyne-mcp": "dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
