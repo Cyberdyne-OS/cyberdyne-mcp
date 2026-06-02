@@ -45,10 +45,10 @@ npm install
 npm run build      # or: npm run dev   (runs src directly via tsx)
 npm start          # serves on stdio
 npm run smoke      # end-to-end self-test
-npm run rug-check  # trading-agent example (see below)
+npm run reliability-check  # trading-agent example (see below)
 ```
 
-## Example: a trading agent hires a human to rug-check a token
+## Example: a trading agent hires a human for a token reliability check
 
 Before an autonomous trader fires a risky buy, it can hire a human through this
 gateway to vet the token, then pay on verify — direct, no escrow. The pattern
@@ -56,7 +56,7 @@ behind x402-native traders like [Bankr](https://bankr.bot) (see
 **[BANKR.md](./BANKR.md)** for that write-up). Run it end to end:
 
 ```bash
-npm run build && npm run rug-check
+npm run build && npm run reliability-check
 ```
 
 ## Connect from Claude Code

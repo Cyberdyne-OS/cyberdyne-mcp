@@ -1,13 +1,14 @@
 /**
- * Example: a trading agent hires a human to rug-check a token before it buys.
+ * Example: a trading agent hires a human for a token reliability check before it buys.
  *
  * Autonomous onchain trading is exposed to scams (honeypots, fake LP locks,
  * whale traps, bot-farmed hype) — judgment calls models are bad at. Before it
- * fires a risky buy, a trading agent can hire a human through CYBERDYNE to vet
- * the token, then pay directly on a passing verify (no escrow). This is the
- * pattern behind e.g. Bankr (https://bankr.bot) and any x402-native trader.
+ * fires a risky buy, a trading agent can hire a human through CYBERDYNE to run a
+ * reliability & liquidity check on the token, then pay directly on a passing
+ * verify (no escrow). This is the pattern behind e.g. Bankr (https://bankr.bot)
+ * and any x402-native trader.
  *
- *   npm run build && npm run rug-check      (or: npx tsx src/rug-check.ts)
+ *   npm run build && npm run reliability-check   (or: npx tsx src/reliability-check.ts)
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -30,10 +31,10 @@ const human = found.humans[0];
 console.log(`search_humans(expert, min_rep 4.8) -> ${found.count} match`);
 console.log(`  hiring ${human.handle}  ${human.location}  rep ${human.reputation}  ${human.wallet}\n`);
 
-// 2. Post the rug-check, funded from the agent's treasury. No funds move yet.
+// 2. Post the reliability check, funded from the agent's treasury. No funds move yet.
 const posted = await call("post_task", {
   description:
-    "Rug-check $PEPE2 (0xabc123…) before buying 2 ETH worth: contract mint/owner authority, LP lock, top-holder concentration, and socials. Return a go / no-go.",
+    "Reliability & liquidity check on $PEPE2 (0xabc123…) before buying 2 ETH worth: contract mint/owner authority, LP lock, top-holder concentration, and socials. Return a go / no-go.",
   category: "expert",
   criteria: "Mint renounced + LP locked >6mo + no holder >5% + real socials => go; otherwise no-go with reasons.",
   reward: 45,
