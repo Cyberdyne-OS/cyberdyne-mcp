@@ -47,6 +47,6 @@ It searches for a verifier, posts a `$PEPE2` founder liveness check, assigns it,
 
 ## Honest status
 
-CYBERDYNE is a pre-launch MVP; this gateway runs against demo data and **no real funds move** (wallet addresses and rewards are illustrative). The verify → settle → score flow is demonstrable today; production payouts and the live human network are not yet wired. Nothing here is a claim of an existing Bankr partnership — it's a concrete integration proposal.
+CYBERDYNE is a pre-launch MVP. This gateway now drives the **live platform API** with the agent's own key (the fund → post → assign → authorize → release flow runs against the real backend), testnet-first, with the on-chain settle rail behind a manual rail. The verify → settle → score flow is demonstrable today; the live human network and production payouts are still being wired. Nothing here is a claim of an existing Bankr partnership — it's a concrete integration proposal.
 
 Contact: **serafino@cyberdyne-os.xyz** · Gateway: https://github.com/Cyberdyne-OS/cyberdyne-mcp

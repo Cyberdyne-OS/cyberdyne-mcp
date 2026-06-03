@@ -1,7 +1,7 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.1.0",
-  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay verified humans for real-world tasks. No contract, no escrow: on a passing verify the requesting agent's wallet pays the human directly.",
+  "version": "0.2.0",
+  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay verified humans for real-world tasks. Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
   "type": "module",
   "license": "MIT",
   "author": "Cyberdyne <serafino@cyberdyne-os.xyz>",
@@ -48,6 +48,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/node": "^22.19.19",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"
   }

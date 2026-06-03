@@ -1,319 +1,227 @@
 #!/usr/bin/env node
 /**
- * CYBERDYNE MCP server — the agent gateway.
+ * CYBERDYNE MCP server — the agent gateway (LIVE).
  *
- * Exposes the marketplace to any MCP-capable agent (Claude, etc.) as tools:
- *   list_categories   — what kinds of real-world work humans can do
- *   search_humans     — find verified humans by capability, location, language…
- *   post_task         — open a task; get matched human candidates
- *   assign_task       — pick a human; they begin work
- *   get_task          — poll status; proof appears when the human submits
- *   release_payment   — verify the proof; agent wallet → human wallet, both scored
- *   get_treasury      — the agent's remaining demo balance
+ * Exposes the CYBERDYNE marketplace to any MCP-capable agent (Claude, etc.) as
+ * tools that call the REAL platform API. There is NO in-memory state any more —
+ * every tool is a thin, typed wrapper over an HTTP endpoint on the live backend.
  *
- * Model: no contract, no escrow. On a passing verify the requesting agent's
- * wallet pays the human directly — the same settlement shown in the app.
+ *   list_categories  — the static task taxonomy (no network)
+ *   search_humans    — POST /api/a2a {search_humans}      → capability index
+ *   get_treasury     — GET  /api/treasury                 → the agent's balance
+ *   fund_treasury    — POST /api/treasury/fund            → demo top-up
+ *   post_task        — POST /api/tasks                    → open a task
+ *   assign_task      — POST /api/tasks/[id]/assign        → pick a human (→ authIntent)
+ *   authorize_task   — POST /api/tasks/[id]/authorize     → open the escrow hold
+ *   get_task         — GET  /api/tasks/[id]               → status + submissions/claims
+ *   release_payment  — POST /api/tasks/[id]/release       → capture (pay) or reject
+ *   close_task       — POST /api/tasks/[id]/close         → close a (multi-unit) bounty
  *
- * This is a demo: state is in-memory and no real funds move. Run it over stdio
- * and connect from any MCP client.
+ * Auth: every networked tool sends the agent's `cyb_…` key. The REST routes take
+ * it as `Authorization: Bearer …`; search_humans goes through the a2a JSON-RPC
+ * gateway (the REST GET /api/humans is session-only), which carries the key as
+ * `identity_token`.
+ *
+ * The HUMAN submit-proof step happens in the app/UI (human-only — agents cannot
+ * submit on a human's behalf). So an agent's end-to-end flow is:
+ *   fund_treasury → post_task → (humans claim, or assign_task picks one)
+ *     → assign_task → authorize_task (open the hold)
+ *     → poll get_task until a submission appears
+ *     → release_payment (approve → capture; else reject → refund)
+ *
+ * Config comes from the environment (see src/client.ts):
+ *   CYBERDYNE_API_URL         default "https://app.cyberdyne-os.xyz"
+ *   CYBERDYNE_IDENTITY_TOKEN  the agent's cyb_ key (required for networked tools)
  */
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import {
-  HUMANS,
-  CATEGORIES,
-  AGENT_TREASURY_START,
-  type Category,
-  type Human
-} from "./registry.js";
+import { CATEGORIES, TASK_CATEGORIES } from "./registry.js";
+import { ApiError, CyberdyneClient, MissingTokenError, readConfig } from "./client.js";
 
-// ---- In-memory marketplace state (resets each run) ------------------------
+const config = readConfig();
+const client = new CyberdyneClient(config);
 
-type TaskStatus =
-  | "open" // posted, awaiting assignment
-  | "assigned" // a human is working
-  | "submitted" // proof is in, awaiting the agent's verify
-  | "settled" // verified + paid
-  | "rejected"; // verify failed
-
-interface PostedTask {
-  id: string;
-  description: string;
-  category: Category;
-  criteria: string;
-  reward: number;
-  deadlineHours: number;
-  status: TaskStatus;
-  agentWallet: string;
-  assignedHumanId?: string;
-  proof?: { url: string; note: string };
-  receipt?: Settlement;
-}
-
-interface Settlement {
-  taskId: string;
-  from: string; // agent wallet
-  to: string; // human wallet
-  amount: number;
-  humanReputationAfter: number;
-  settledAtSeq: number;
-}
-
-const tasks = new Map<string, PostedTask>();
-let treasury = AGENT_TREASURY_START;
-let seq = 0; // monotonic counter — avoids Date.now()/random for determinism
-const nextId = (prefix: string) => `${prefix}-${(++seq).toString(36)}`;
-
-// Mutable copy of reputations so scoring persists across calls this session.
-const reputation = new Map<string, number>(HUMANS.map((h) => [h.id, h.reputation]));
-
-const publicHuman = (h: Human) => ({
-  id: h.id,
-  handle: h.handle,
-  skills: h.skills,
-  tags: h.tags,
-  location: h.location,
-  timezone: h.timezone,
-  languages: h.languages,
-  devices: h.devices,
-  reputation: reputation.get(h.id) ?? h.reputation,
-  tasksDone: h.tasksDone,
-  responseMins: h.responseMins,
-  available: h.available,
-  wallet: h.wallet
-});
+// ---- Result helpers -------------------------------------------------------
 
 const json = (data: unknown) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }]
+  content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
 });
 const err = (message: string) => ({
   content: [{ type: "text" as const, text: JSON.stringify({ error: message }, null, 2) }],
-  isError: true
+  isError: true,
 });
+
+/** Run a tool body, mapping client errors to a clean MCP error result. */
+async function guard<T>(fn: () => Promise<T>) {
+  try {
+    return json(await fn());
+  } catch (e) {
+    if (e instanceof MissingTokenError) return err(e.message);
+    if (e instanceof ApiError) return err(e.message);
+    return err(e instanceof Error ? e.message : String(e));
+  }
+}
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({
-  name: "cyberdyne",
-  version: "0.1.0"
-});
+const server = new McpServer({ name: "cyberdyne", version: "0.2.0" });
 
 server.tool(
   "list_categories",
-  "List the kinds of real-world work CYBERDYNE humans can do. Use this to learn the valid `category` values before posting a task.",
+  "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.",
   {},
-  async () =>
-    json(
-      Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))
-    )
+  async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))),
 );
 
 server.tool(
   "search_humans",
-  "Find verified humans by capability. All filters are optional and combine (AND). Results are ranked by reputation. This is the discovery gateway: query the capability index, get a ranked shortlist with wallets and reputation.",
+  "Find verified humans by capability via the live capability index (a2a gateway). Filters are optional and combine (AND). Results are role='human' profiles ranked by reputation, projected to public columns (no wallets/balances). Note: `skills` is an array.",
   {
-    skill: z
-      .enum(["groundtruth", "capture", "agenteval", "expert", "demo", "data"])
+    skills: z
+      .array(z.enum(TASK_CATEGORIES))
       .optional()
-      .describe("A task category the human must be able to do."),
-    location: z.string().optional().describe("Substring match on location, e.g. 'ES', 'Tokyo'."),
-    language: z.string().optional().describe("ISO-ish language code the human speaks, e.g. 'es', 'ja'."),
-    device: z.string().optional().describe("Required device/capability, e.g. 'car', 'studio-mic'."),
-    tag: z.string().optional().describe("Free-form sub-skill, e.g. 'transcription', 'ground-truth'."),
+      .describe("Task categories the human must be able to do (all must match)."),
     min_reputation: z.number().min(0).max(5).optional().describe("Minimum reputation (0–5)."),
-    available_only: z.boolean().optional().default(true).describe("Only return humans currently available."),
-    limit: z.number().int().min(1).max(50).optional().default(10)
+    location: z.string().optional().describe("Substring match on location, e.g. 'ES', 'Tokyo'."),
   },
-  async ({ skill, location, language, device, tag, min_reputation, available_only, limit }) => {
-    const matches = HUMANS.filter((h) => {
-      if (skill && !h.skills.includes(skill)) return false;
-      if (available_only && !h.available) return false;
-      if (location && !h.location.toLowerCase().includes(location.toLowerCase())) return false;
-      if (language && !h.languages.includes(language.toLowerCase())) return false;
-      if (device && !h.devices.some((d) => d.toLowerCase().includes(device.toLowerCase()))) return false;
-      if (tag && !h.tags.some((t) => t.toLowerCase().includes(tag.toLowerCase()))) return false;
-      if (min_reputation != null && (reputation.get(h.id) ?? h.reputation) < min_reputation) return false;
-      return true;
-    })
-      .map(publicHuman)
-      .sort((a, b) => b.reputation - a.reputation)
-      .slice(0, limit);
-
-    return json({ count: matches.length, humans: matches });
-  }
-);
-
-server.tool(
-  "post_task",
-  "Open a task on the marketplace and get matched human candidates. Funds are NOT moved yet — payment only happens on release_payment after you verify the proof. Returns a task_id and a ranked shortlist of candidates whose skills match the category.",
-  {
-    description: z.string().min(3).describe("What you need the human to do."),
-    category: z.enum(["groundtruth", "capture", "agenteval", "expert", "demo", "data"]),
-    criteria: z.string().min(3).describe("Acceptance criteria you'll verify the proof against."),
-    reward: z.number().positive().describe("Reward in demo USD, paid from your treasury on verify."),
-    deadline_hours: z.number().positive().max(168).optional().default(48),
-    agent_wallet: z.string().optional().default("0xAGENT…0001").describe("Your wallet (source of funds).")
-  },
-  async ({ description, category, criteria, reward, deadline_hours, agent_wallet }) => {
-    if (reward > treasury) {
-      return err(`Reward ${reward} exceeds treasury balance ${treasury.toFixed(2)}.`);
-    }
-    const id = nextId("task");
-    tasks.set(id, {
-      id,
-      description,
-      category,
-      criteria,
-      reward,
-      deadlineHours: deadline_hours,
-      status: "open",
-      agentWallet: agent_wallet
-    });
-
-    const candidates = HUMANS.filter((h) => h.skills.includes(category) && h.available)
-      .map(publicHuman)
-      .sort((a, b) => b.reputation - a.reputation)
-      .slice(0, 5);
-
-    return json({
-      task_id: id,
-      status: "open",
-      reward,
-      deadline_hours,
-      candidates,
-      next: "Call assign_task with this task_id and a human_id to start the work."
-    });
-  }
-);
-
-server.tool(
-  "assign_task",
-  "Assign an open task to a chosen human. They begin work immediately. Poll get_task to see when their proof is submitted.",
-  {
-    task_id: z.string(),
-    human_id: z.string()
-  },
-  async ({ task_id, human_id }) => {
-    const task = tasks.get(task_id);
-    if (!task) return err(`Unknown task_id ${task_id}.`);
-    if (task.status !== "open") return err(`Task ${task_id} is '${task.status}', not 'open'.`);
-    const human = HUMANS.find((h) => h.id === human_id);
-    if (!human) return err(`Unknown human_id ${human_id}.`);
-    if (!human.skills.includes(task.category)) {
-      return err(`${human.handle} cannot do '${task.category}' work (skills: ${human.skills.join(", ")}).`);
-    }
-    task.status = "assigned";
-    task.assignedHumanId = human_id;
-    return json({
-      task_id,
-      status: "assigned",
-      assigned_to: publicHuman(human),
-      next: "Call get_task to retrieve the proof once the human submits."
-    });
-  }
-);
-
-server.tool(
-  "get_task",
-  "Get the current state of a task. Once a human is assigned, calling this advances the demo: the human submits proof, moving the task to 'submitted' so you can verify it with release_payment.",
-  { task_id: z.string() },
-  async ({ task_id }) => {
-    const task = tasks.get(task_id);
-    if (!task) return err(`Unknown task_id ${task_id}.`);
-
-    // Demo progression: an assigned task produces proof on the next poll.
-    if (task.status === "assigned") {
-      const human = HUMANS.find((h) => h.id === task.assignedHumanId)!;
-      task.status = "submitted";
-      task.proof = {
-        url: `https://proof.cyberdyne-os.xyz/${task_id}`,
-        note: `${human.handle} completed "${task.description}" — artifact attached for review against your criteria.`
-      };
-    }
-
-    return json({
-      task_id: task.id,
-      status: task.status,
-      description: task.description,
-      category: task.category,
-      criteria: task.criteria,
-      reward: task.reward,
-      deadline_hours: task.deadlineHours,
-      assigned_human_id: task.assignedHumanId ?? null,
-      proof: task.proof ?? null,
-      receipt: task.receipt ?? null,
-      next:
-        task.status === "submitted"
-          ? "Review the proof, then call release_payment with approve:true to pay, or approve:false to reject."
-          : task.status === "settled"
-            ? "Done. Funds transferred agent → human; both sides scored."
-            : null
-    });
-  }
-);
-
-server.tool(
-  "release_payment",
-  "Verify a submitted proof and settle. With approve:true the reward transfers directly from your wallet to the human's wallet (no escrow) and both sides are scored up. With approve:false the task is rejected and no funds move.",
-  {
-    task_id: z.string(),
-    approve: z.boolean().describe("true = proof meets criteria → pay; false = reject."),
-    score: z.number().min(1).max(5).optional().default(5).describe("Your rating of the human's work (1–5).")
-  },
-  async ({ task_id, approve, score }) => {
-    const task = tasks.get(task_id);
-    if (!task) return err(`Unknown task_id ${task_id}.`);
-    if (task.status !== "submitted") {
-      return err(`Task ${task_id} is '${task.status}'. Only a 'submitted' task can be settled.`);
-    }
-    const human = HUMANS.find((h) => h.id === task.assignedHumanId)!;
-
-    if (!approve) {
-      task.status = "rejected";
-      return json({
-        task_id,
-        status: "rejected",
-        paid: 0,
-        note: "Proof rejected. No funds moved. You may post_task again."
-      });
-    }
-
-    // Direct settlement: agent treasury → human wallet.
-    treasury = +(treasury - task.reward).toFixed(2);
-    const newRep = +Math.min(5, (reputation.get(human.id) ?? human.reputation) + 0.01).toFixed(2);
-    reputation.set(human.id, newRep);
-
-    const receipt: Settlement = {
-      taskId: task_id,
-      from: task.agentWallet,
-      to: human.wallet,
-      amount: task.reward,
-      humanReputationAfter: newRep,
-      settledAtSeq: ++seq
-    };
-    task.status = "settled";
-    task.receipt = receipt;
-
-    return json({
-      task_id,
-      status: "settled",
-      settlement: receipt,
-      treasury_remaining: treasury,
-      note: `Paid $${task.reward.toFixed(2)} from ${task.agentWallet} → ${human.handle} (${human.wallet}). No contract, no escrow.`
-    });
-  }
+  async ({ skills, min_reputation, location }) =>
+    guard(() =>
+      client.a2a<{ humans: unknown[] }>("search_humans", {
+        ...(skills ? { skills } : {}),
+        ...(min_reputation != null ? { min_reputation } : {}),
+        ...(location ? { location } : {}),
+      }),
+    ),
 );
 
 server.tool(
   "get_treasury",
-  "Get the agent's remaining demo treasury balance (the source of task rewards).",
+  "Get the agent's own treasury (the source of task rewards on the manual rail). Returns null if the agent has no treasury yet — call fund_treasury to create one.",
   {},
-  async () => json({ treasury_remaining: treasury, currency: "USD (demo)" })
+  async () => guard(() => client.rest("GET", "/api/treasury")),
+);
+
+server.tool(
+  "fund_treasury",
+  "Demo top-up: add USD to the agent's treasury balance (creating the treasury row if absent). This is the testnet/demo deposit; the real x402 deposit rail lands later.",
+  { amount_usd: z.number().positive().describe("USD to add to the treasury balance.") },
+  async ({ amount_usd }) =>
+    guard(() => client.rest("POST", "/api/treasury/fund", { body: { amount_usd } })),
+);
+
+server.tool(
+  "post_task",
+  "Open a task on the marketplace. Funds are NOT charged at post — the escrow hold opens later at authorize_task. On the manual rail the platform only checks the treasury can cover the budget (402 insufficient_treasury otherwise). `reward_usd` is the total budget; with quantity>1 each unit holds reward_usd/quantity. Returns the created task (with its id).",
+  {
+    title: z.string().min(2).max(160).describe("Short task title."),
+    category: z.enum(TASK_CATEGORIES),
+    description: z.string().max(4000).optional().describe("What you need the human to do."),
+    steps: z.array(z.string()).optional().describe("Ordered steps / acceptance criteria."),
+    reward_usd: z.number().positive().describe("Total reward budget in USD."),
+    quantity: z.number().int().positive().optional().describe("Number of identical units (default 1)."),
+    duration_min: z.number().int().positive().describe("Estimated minutes to complete."),
+    difficulty: z.enum(["easy", "medium", "hard"]),
+    pay_token: z.enum(["USDC", "BNKR", "CYOS"]).optional().describe("Settlement token (default USDC)."),
+    deadline_hours: z.number().int().positive().optional(),
+  },
+  async (args) => guard(() => client.rest("POST", "/api/tasks", { body: args })),
+);
+
+server.tool(
+  "assign_task",
+  "Assign an open task to a chosen human (poster-only) and open the escrow intent. Returns `{ task, authIntent }`: on an on-chain rail `authIntent` is the auth-capture requirements the agent must sign; on the manual rail it is null. Next call authorize_task to actually open the hold.",
+  {
+    task_id: z.string().uuid(),
+    human_id: z.string().uuid().describe("The human profile id (from search_humans / get_task claims)."),
+  },
+  async ({ task_id, human_id }) =>
+    guard(() => client.rest("POST", `/api/tasks/${task_id}/assign`, { body: { human_id } })),
+);
+
+server.tool(
+  "authorize_task",
+  "Open the escrow hold for an assigned task (poster-only). On the manual rail the body is empty (logical treasury debit). On an on-chain rail pass `signed_payment` — the base64 agent-signed auth-capture payload from the authIntent returned by assign_task. Idempotent once held.",
+  {
+    task_id: z.string().uuid(),
+    signed_payment: z
+      .string()
+      .optional()
+      .describe("On-chain rail only: base64-encoded signed auth-capture payload."),
+  },
+  async ({ task_id, signed_payment }) =>
+    guard(() =>
+      client.rest("POST", `/api/tasks/${task_id}/authorize`, {
+        body: signed_payment ? { signedPayment: signed_payment } : {},
+      }),
+    ),
+);
+
+server.tool(
+  "get_task",
+  "Get the live state of a task: the task row plus the submissions and per-unit claims the agent (as poster) may see. Poll this after authorize_task until a submission with status 'pending' appears — that is the human's proof, ready for release_payment.",
+  { task_id: z.string().uuid() },
+  async ({ task_id }) => guard(() => client.rest("GET", `/api/tasks/${task_id}`)),
+);
+
+server.tool(
+  "release_payment",
+  "Settle a submitted proof (poster-only). approve:true → CAPTURE: pay the human net of platform fee. approve:false → REJECT/REFUND the held escrow. Requires the `submission_id` to act on; if omitted, the gateway fetches the task and uses the latest pending submission (and errors if none is pending yet — poll get_task first).",
+  {
+    task_id: z.string().uuid(),
+    approve: z.boolean().describe("true = proof meets criteria → pay; false = reject/refund."),
+    submission_id: z
+      .string()
+      .uuid()
+      .optional()
+      .describe("The submission to settle. Auto-resolved to the latest pending one if omitted."),
+    score: z.number().int().min(1).max(5).optional().describe("Rating of the human's work (1–5)."),
+    reject_reason: z.string().max(1000).optional().describe("Why the proof was rejected (approve:false)."),
+  },
+  async ({ task_id, approve, submission_id, score, reject_reason }) =>
+    guard(async () => {
+      // The release endpoint settles a specific submission. If the caller didn't
+      // pass one, resolve the latest PENDING submission from the live task.
+      let sid = submission_id;
+      if (!sid) {
+        const detail = await client.rest<{ submissions?: Array<{ id: string; status: string }> }>(
+          "GET",
+          `/api/tasks/${task_id}`,
+        );
+        const pending = (detail.submissions ?? []).find((s) => s.status === "pending");
+        if (!pending) {
+          throw new ApiError(
+            409,
+            "no_pending_submission (poll get_task until the human submits proof)",
+            `GET /api/tasks/${task_id}`,
+          );
+        }
+        sid = pending.id;
+      }
+      return client.rest("POST", `/api/tasks/${task_id}/release`, {
+        body: {
+          submission_id: sid,
+          approve,
+          ...(score != null ? { score } : {}),
+          ...(reject_reason ? { reject_reason } : {}),
+        },
+      });
+    }),
+);
+
+server.tool(
+  "close_task",
+  "Close a (multi-unit) bounty (poster-only): refund every still-held unit to the agent, mark unclaimed units done, and stop further claims. Idempotent on an already-closed task.",
+  { task_id: z.string().uuid() },
+  async ({ task_id }) => guard(() => client.rest("POST", `/api/tasks/${task_id}/close`)),
 );
 
 // ---- Boot -----------------------------------------------------------------
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
-console.error("CYBERDYNE MCP server running on stdio. Tools: list_categories, search_humans, post_task, assign_task, get_task, release_payment, get_treasury.");
+console.error(
+  `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
+    (config.token ? "" : " (no CYBERDYNE_IDENTITY_TOKEN set; networked tools will error until you set it)") +
+    ". Tools: list_categories, search_humans, get_treasury, fund_treasury, post_task, assign_task, authorize_task, get_task, release_payment, close_task.",
+);

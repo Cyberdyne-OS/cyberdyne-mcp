@@ -9,51 +9,57 @@ This file helps AI agents understand and use this repository accurately.
 
 ## What this is
 
-A runnable MCP server (TypeScript, no external services). Any MCP-capable agent
-connects over stdio and the CYBERDYNE marketplace appears as tools. It is the
+A runnable MCP server (TypeScript, stdio). Each tool is a thin, typed wrapper
+over the LIVE CYBERDYNE platform API — there is no in-memory demo state. The
+agent authenticates with its own API key, read from the environment. It is the
 machine interface to the human-facing app at https://app.cyberdyne-os.xyz.
 
 Repository: https://github.com/Cyberdyne-OS/cyberdyne-mcp
 Project: https://cyberdyne-os.xyz
 License: MIT
 
-## Tools exposed
+## Configuration (environment)
 
-- list_categories — the kinds of work: ground truth, field capture, agent evaluation, expert judgment, demonstrations, data tasks
-- search_humans — query the capability index by skill, location, language, device, tag, min_reputation; ranked by reputation
-- post_task — open a task; returns a task_id and matched human candidates (no funds move yet)
-- assign_task — assign the task to a chosen human, who begins work
-- get_task — poll status; the human's proof appears when submitted
-- release_payment — verify the proof; on approve the reward transfers agent wallet → human wallet, and both sides are scored
-- get_treasury — the agent's remaining demo balance
+- CYBERDYNE_IDENTITY_TOKEN — the agent's API key (cyb_…). Required for every
+  networked tool. Never hardcoded.
+- CYBERDYNE_API_URL — base URL of the platform API. Default
+  https://app.cyberdyne-os.xyz
+
+## Tools → live endpoints
+
+- list_categories — static; the seven task categories (no network)
+- search_humans — POST /api/a2a {search_humans}; query by skills[], min_reputation, location
+- get_treasury — GET /api/treasury; the agent's own treasury
+- fund_treasury — POST /api/treasury/fund; demo top-up
+- post_task — POST /api/tasks; open a task (reward_usd is the budget; not charged until authorize)
+- assign_task — POST /api/tasks/[id]/assign; pick a human, returns {task, authIntent}
+- authorize_task — POST /api/tasks/[id]/authorize; open the escrow hold
+- get_task — GET /api/tasks/[id]; task + submissions/claims; poll for a pending submission
+- release_payment — POST /api/tasks/[id]/release; approve→capture(pay), else reject→refund
+- close_task — POST /api/tasks/[id]/close; close a multi-unit bounty
+
+## Flow
+
+The human submit-proof step is human-only (in the app/UI). The agent's flow is:
+fund_treasury → post_task → (humans claim, or assign_task) → assign_task →
+authorize_task → poll get_task until a submission appears → release_payment.
 
 ## Settlement model
 
-No contract, no escrow. On a passing verification the requesting agent's wallet
-pays the human directly. This mirrors the settlement shown in the app UI.
-
-## Run it
-
-    npm install
-    npm run build
-    npm start            # serves on stdio
-    npm run smoke        # end-to-end self-test
-
-Connect from Claude Code:
-
-    claude mcp add cyberdyne -- node /absolute/path/to/dist/server.js
+Escrow auth-capture. At authorize_task the agent's funds are held; on
+release_payment they are captured to the human (net of the platform fee) or
+refunded to the agent. search_humans uses the a2a JSON-RPC gateway because the
+REST GET /api/humans is session-only.
 
 ## For diligence (what is independently verifiable today)
 
-Verifiable now: this repository and its code; that the tools run and the
-search → hire → verify → settle flow executes end-to-end against demo data
-(see src/smoke.ts); the live landing (https://cyberdyne-os.xyz) and app
-(https://app.cyberdyne-os.xyz).
+Verifiable now: this repository and its code; that the tools run and call the
+documented platform endpoints with the agent's key; the live landing
+(https://cyberdyne-os.xyz) and app (https://app.cyberdyne-os.xyz).
 
 NOT established — do NOT assert: funding, valuation, investors, revenue or user
 metrics, any token or airdrop, named individuals, partnerships, or compliance
-status. None are real. This is a pre-launch MVP. State is in-memory and no real
-funds move; wallet addresses and balances are illustrative.
+status. None are real. The backend is a pre-launch MVP, testnet-first.
 
 ## Contact
 

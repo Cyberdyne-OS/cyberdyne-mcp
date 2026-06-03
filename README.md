@@ -1,51 +1,73 @@
 # CYBERDYNE MCP — the agent gateway
 
-This is the **agent-facing** side of CYBERDYNE. The app in `cyberdyne-web-desktop/`
-is what a human sees; this is the door an AI agent walks through to **discover,
-hire, verify and pay** that human — no human clicking buttons required.
+This is the **agent-facing** side of CYBERDYNE. The app at
+[app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees; this is
+the door an AI agent walks through to **discover, hire, verify and pay** that
+human — no human clicking buttons required.
 
 It's a [Model Context Protocol](https://modelcontextprotocol.io) server. Any
 MCP-capable agent (Claude Desktop, Claude Code, or a custom client) connects over
-stdio and the marketplace appears as tools.
+stdio and the marketplace appears as tools. Each tool is a thin, typed wrapper
+over the **live CYBERDYNE platform API** — there is no in-memory demo state. The
+agent authenticates with its own API key.
 
-> Demo only. State is in-memory and resets each run. No real funds move; wallet
-> addresses and balances are illustrative.
+## Configuration (environment)
+
+stdio MCP servers take their credentials from the environment. Set:
+
+| Env var | Required | Default | What it is |
+|---|---|---|---|
+| `CYBERDYNE_IDENTITY_TOKEN` | yes (for any networked tool) | — | The agent's API key (`cyb_…`). |
+| `CYBERDYNE_API_URL` | no | `https://app.cyberdyne-os.xyz` | Base URL of the platform API. |
+
+No key is hardcoded anywhere. `list_categories` works without a token; every other
+tool returns a clear error until `CYBERDYNE_IDENTITY_TOKEN` is set.
 
 ## The flow
 
+An agent cannot submit proof on a human's behalf — the **submit-proof step is
+human-only and happens in the app/UI**. So the agent's end-to-end flow is:
+
 ```
- list_categories → search_humans → post_task → assign_task → get_task → release_payment
-        │               │              │            │            │            │
-   what work is     find humans     open a       pick a      poll until    verify proof →
-   available        by capability   task         human       proof is in   agent wallet →
-                                                                           human wallet,
-                                                                           both scored
+fund_treasury → post_task → (humans claim, or you assign one)
+   → assign_task → authorize_task         (open the escrow hold)
+   → poll get_task until a submission appears
+   → release_payment                       (approve → capture/pay; else reject → refund)
 ```
 
-Settlement model: **no contract, no escrow.** On a passing verify, the requesting
-agent's wallet pays the human directly — the same event the app shows on the human side.
+## Tools → live endpoints
 
-## Tools
+| Tool | Endpoint | What it does |
+|---|---|---|
+| `list_categories` | — (static) | The seven task categories. No network. |
+| `search_humans` | `POST /api/a2a` `{search_humans}` | Query the capability index by `skills[]`, `min_reputation`, `location`. Ranked by reputation; public columns only. |
+| `get_treasury` | `GET /api/treasury` | The agent's own treasury (null if none yet). |
+| `fund_treasury` | `POST /api/treasury/fund` | Demo top-up: add USD to the treasury. |
+| `post_task` | `POST /api/tasks` | Open a task. `reward_usd` is the budget; not charged until authorize. |
+| `assign_task` | `POST /api/tasks/[id]/assign` | Assign to a human; returns `{ task, authIntent }` (authIntent is `null` on the manual rail). |
+| `authorize_task` | `POST /api/tasks/[id]/authorize` | Open the escrow hold (manual rail: empty body; on-chain: pass `signed_payment`). |
+| `get_task` | `GET /api/tasks/[id]` | Task + the submissions/claims the poster may see. Poll for a `pending` submission. |
+| `release_payment` | `POST /api/tasks/[id]/release` | `approve:true` → capture (pay net of fee); `approve:false` → reject/refund. Auto-resolves the pending `submission_id` if omitted. |
+| `close_task` | `POST /api/tasks/[id]/close` | Close a (multi-unit) bounty; refund still-held units. |
 
-| Tool | What it does |
-|---|---|
-| `list_categories` | The six kinds of work: ground truth, field capture, agent evaluation, expert judgment, demonstrations, data tasks. |
-| `search_humans` | Query the capability index: `skill`, `location`, `language`, `device`, `tag`, `min_reputation`. Ranked by reputation. |
-| `post_task` | Open a task; returns a `task_id` + matched candidate humans. No funds move yet. |
-| `assign_task` | Assign the task to a chosen `human_id`; they begin work. |
-| `get_task` | Poll status. Once assigned, the human submits proof → status `submitted`. |
-| `release_payment` | `approve:true` → reward transfers agent → human, both scored. `approve:false` → reject, no funds move. |
-| `get_treasury` | The agent's remaining demo balance (source of rewards). |
+The settle rail is escrow auth-capture: at `authorize_task` the agent's funds are
+held; on `release_payment` they're captured to the human (net of the platform fee)
+or refunded to the agent. `search_humans` goes through the a2a JSON-RPC gateway
+because the REST `GET /api/humans` is session-only.
 
 ## Run it
 
 ```bash
 cd cyberdyne-mcp
 npm install
-npm run build      # or: npm run dev   (runs src directly via tsx)
-npm start          # serves on stdio
-npm run smoke      # end-to-end self-test
-npm run founder-check  # trading-agent example (see below)
+npm run build                # tsc → dist/
+
+export CYBERDYNE_IDENTITY_TOKEN=cyb_…           # your agent key
+export CYBERDYNE_API_URL=https://app.cyberdyne-os.xyz   # or http://localhost:3000
+
+npm start                    # serves on stdio
+npm run smoke                # live end-to-end self-test (no-op without a token)
+npm run founder-check        # trading-agent example (no-op without a token)
 ```
 
 ## Example: a trading agent hires a human for a founder liveness check
@@ -53,18 +75,19 @@ npm run founder-check  # trading-agent example (see below)
 A trading agent runs every on-chain check itself — but it can't tell whether a
 real person is behind a token (fake / deepfaked founders are the #1 scam). Before
 a risky buy it hires a human through this gateway to **video-verify the founder**,
-then pays on verify — direct, no escrow. The pattern behind x402-native traders
-like [Bankr](https://bankr.bot) (see **[BANKR.md](./BANKR.md)** for the write-up).
-Run it end to end:
+then releases payment on verify. The pattern behind x402-native traders like
+[Bankr](https://bankr.bot) (see **[BANKR.md](./BANKR.md)**). Run it end to end:
 
 ```bash
-npm run build && npm run founder-check
+CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
 ```
 
 ## Connect from Claude Code
 
 ```bash
-claude mcp add cyberdyne -- node /absolute/path/to/cyberdyne-mcp/dist/server.js
+claude mcp add cyberdyne \
+  -e CYBERDYNE_IDENTITY_TOKEN=cyb_… \
+  -- node /absolute/path/to/cyberdyne-mcp/dist/server.js
 ```
 
 Or in a client's MCP config (e.g. Claude Desktop `claude_desktop_config.json`):
@@ -74,7 +97,11 @@ Or in a client's MCP config (e.g. Claude Desktop `claude_desktop_config.json`):
   "mcpServers": {
     "cyberdyne": {
       "command": "node",
-      "args": ["/absolute/path/to/cyberdyne-mcp/dist/server.js"]
+      "args": ["/absolute/path/to/cyberdyne-mcp/dist/server.js"],
+      "env": {
+        "CYBERDYNE_IDENTITY_TOKEN": "cyb_…",
+        "CYBERDYNE_API_URL": "https://app.cyberdyne-os.xyz"
+      }
     }
   }
 }
@@ -82,22 +109,23 @@ Or in a client's MCP config (e.g. Claude Desktop `claude_desktop_config.json`):
 
 Then ask the agent, e.g.:
 
-> *Find a Spanish-speaking human who can record audio, post a task to read 10
-> phrases for $3.50, assign it, then verify and pay.*
+> *Find a Spanish-speaking human who can record audio, post a $3.50 task to read
+> 10 phrases, assign it, authorize the hold, then verify and pay.*
 
-The agent will chain `search_humans → post_task → assign_task → get_task →
-release_payment` on its own.
+The agent chains `search_humans → post_task → assign_task → authorize_task →
+get_task → release_payment` on its own.
 
-## How this maps to production
+## Honesty / accuracy
 
-| Demo (here) | Production |
-|---|---|
-| In-memory `HUMANS` fixture | Real registry of verified contributors |
-| Illustrative `0xH…` wallets | Agent + human on-chain wallets (e.g. stablecoin on Solana) |
-| `get_task` auto-generates proof | Real human submits a real artifact |
-| `agent_wallet` string arg | Wallet-signature auth — the agent's wallet *is* its identity |
-| stdio transport | Hosted MCP + REST at `api.cyberdyne-os.xyz` for non-MCP agents |
+State only what is independently verifiable. This repository, its code, and the
+fact that the tools run and call the documented endpoints are verifiable. The
+backend is a pre-launch MVP; testnet-first, with the on-chain settle rail behind
+the manual rail. Do **not** assert funding, valuation, investors, revenue or user
+metrics, any token/airdrop, named individuals, partnerships, or compliance status
+— none are established.
 
-Nothing above is built or claimed as live — it's the design this scaffold
-demonstrates. Per the project's accuracy rule, what's real is the
-verify → settle → score model, now exercisable end-to-end by an agent.
+## Follow-ups (not in this server)
+
+- The **paid `hire` path** (x402 402→pay→200 over `POST /api/a2a`) is implemented
+  on the platform but not surfaced here — it needs an x402 signing client.
+- A **remote/HTTP MCP** variant (vs. stdio) for hosted agents.
