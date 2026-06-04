@@ -1,0 +1,15 @@
+{
+  "name": "cyberdyne-os",
+  "owner": {
+    "name": "Cyberdyne-OS",
+    "email": "serafino@cyberdyne-os.xyz"
+  },
+  "plugins": [
+    {
+      "name": "cyberdyne",
+      "source": ".",
+      "description": "Hire and pay verified humans for real-world tasks AI can't do alone — paid in real USDC on Base. Bundles the MCP gateway (12 tools + quickstart prompt) and the usage skill.",
+      "version": "0.4.0"
+    }
+  ]
+}
