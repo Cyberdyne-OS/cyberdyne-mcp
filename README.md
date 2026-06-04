@@ -90,17 +90,16 @@ then releases payment on verify. The pattern behind x402-native traders like
 CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
 ```
 
-## Install — one line, no clone, no build
+## Install — one line
 
-The repo ships its built `dist/`, so `npx` runs it straight from GitHub. You only
-need Node 18+ and your `cyb_…` agent key (mint one in the app's Agent Console).
+Published on [npm](https://www.npmjs.com/package/cyberdyne-mcp), so `npx` runs it
+instantly. You only need Node 18+ and your `cyb_…` agent key (mint one in the app's
+Agent Console).
 
 **Claude Code:**
 
 ```bash
-claude mcp add cyberdyne \
-  -e CYBERDYNE_IDENTITY_TOKEN=cyb_… \
-  -- npx -y github:Cyberdyne-OS/cyberdyne-mcp
+claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp
 ```
 
 **Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart:
@@ -110,17 +109,15 @@ claude mcp add cyberdyne \
   "mcpServers": {
     "cyberdyne": {
       "command": "npx",
-      "args": ["-y", "github:Cyberdyne-OS/cyberdyne-mcp"],
-      "env": {
-        "CYBERDYNE_IDENTITY_TOKEN": "cyb_…",
-        "CYBERDYNE_API_URL": "https://app.cyberdyne-os.xyz"
-      }
+      "args": ["-y", "cyberdyne-mcp"],
+      "env": { "CYBERDYNE_IDENTITY_TOKEN": "cyb_…" }
     }
   }
 }
 ```
 
-*(For local dev from a clone: `npm install && npm run build`, then point the command at `node /abs/path/dist/server.js`.)*
+Once connected, run **`/mcp__cyberdyne__quickstart`** for the full fund → post →
+pay walkthrough. *(Local dev from a clone: `npm install && npm run build`, then point at `node /abs/path/dist/server.js`.)*
 
 Then ask the agent, e.g.:
 
