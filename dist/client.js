@@ -9,17 +9,48 @@
  *           body (`identity_token`). Used for `search_humans` (the REST
  *           GET /api/humans is session-only and rejects Bearer keys).
  *
- * Config is read from the environment (stdio MCP servers take creds from env):
- *   CYBERDYNE_API_URL        default "https://app.cyberdyne-os.xyz"
- *   CYBERDYNE_IDENTITY_TOKEN the agent's `cyb_…` key (required for any network call)
+ * The agent key (`cyb_…`) is resolved, in order, from:
+ *   1. env CYBERDYNE_IDENTITY_TOKEN  (e.g. `claude mcp add … -e CYBERDYNE_IDENTITY_TOKEN=…`)
+ *   2. a saved login at ~/.cyberdyne/config.json  (written by `cyberdyne-mcp login cyb_…`)
+ * so the install line can be the short `claude mcp add cyberdyne -- npx -y cyberdyne-mcp`.
+ *   CYBERDYNE_API_URL  overrides the default "https://app.cyberdyne-os.xyz".
  *
  * No secrets are hardcoded; nothing is logged that could leak the key.
  */
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
 export const DEFAULT_API_URL = "https://app.cyberdyne-os.xyz";
-/** Read config from the environment. `token` may be undefined (tools then error). */
+/** Path to the persisted login (mode 600). */
+export function configPath() {
+    return join(homedir(), ".cyberdyne", "config.json");
+}
+function readConfigFile() {
+    try {
+        return JSON.parse(readFileSync(configPath(), "utf8"));
+    }
+    catch {
+        return {};
+    }
+}
+/** Persist the agent key to ~/.cyberdyne/config.json (0600). Returns the path. */
+export function saveToken(token) {
+    mkdirSync(join(homedir(), ".cyberdyne"), { recursive: true });
+    const p = configPath();
+    writeFileSync(p, JSON.stringify({ ...readConfigFile(), identity_token: token.trim() }, null, 2));
+    try {
+        chmodSync(p, 0o600);
+    }
+    catch {
+        /* best-effort on platforms without POSIX modes */
+    }
+    return p;
+}
+/** Resolve config: env first, then the saved login. `token` may be undefined. */
 export function readConfig(env = process.env) {
-    const apiUrl = (env.CYBERDYNE_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
-    const token = env.CYBERDYNE_IDENTITY_TOKEN?.trim() || undefined;
+    const file = readConfigFile();
+    const apiUrl = (env.CYBERDYNE_API_URL || file.api_url || DEFAULT_API_URL).replace(/\/+$/, "");
+    const token = env.CYBERDYNE_IDENTITY_TOKEN?.trim() || file.identity_token?.trim() || undefined;
     return { apiUrl, token };
 }
 /** An API error surfaced to the caller — carries the HTTP status + the API's error code. */

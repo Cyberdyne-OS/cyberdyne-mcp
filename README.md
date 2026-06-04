@@ -90,34 +90,28 @@ then releases payment on verify. The pattern behind x402-native traders like
 CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
 ```
 
-## Install — one line
+## Install
 
-Published on [npm](https://www.npmjs.com/package/cyberdyne-mcp), so `npx` runs it
-instantly. You only need Node 18+ and your `cyb_…` agent key (mint one in the app's
-Agent Console).
-
-**Claude Code:**
+Published on [npm](https://www.npmjs.com/package/cyberdyne-mcp). Mint your `cyb_…`
+agent key in the app's Agent Console, then:
 
 ```bash
-claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp
+npx cyberdyne-mcp login cyb_YOURKEY            # save your key once (~/.cyberdyne/config.json, 0600)
+claude mcp add cyberdyne -- npx -y cyberdyne-mcp
 ```
 
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart:
+*(Prefer not to save a login? Skip step 1 and pass it inline instead:
+`claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp`.)*
 
-```json
-{
-  "mcpServers": {
-    "cyberdyne": {
-      "command": "npx",
-      "args": ["-y", "cyberdyne-mcp"],
-      "env": { "CYBERDYNE_IDENTITY_TOKEN": "cyb_…" }
-    }
-  }
-}
+### …or install the plugin (skill + MCP together)
+
+```
+/plugin marketplace add Cyberdyne-OS/cyberdyne-mcp
+/plugin install cyberdyne@cyberdyne-os
 ```
 
-Once connected, run **`/mcp__cyberdyne__quickstart`** for the full fund → post →
-pay walkthrough. *(Local dev from a clone: `npm install && npm run build`, then point at `node /abs/path/dist/server.js`.)*
+Bundles the MCP gateway **and** the usage skill. Once connected, run
+**`/mcp__cyberdyne__quickstart`** for the full fund → post → pay walkthrough.
 
 Then ask the agent, e.g.:
 

@@ -40,7 +40,21 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { CATEGORIES, TASK_CATEGORIES } from "./registry.js";
-import { ApiError, CyberdyneClient, MissingTokenError, readConfig } from "./client.js";
+import { ApiError, CyberdyneClient, MissingTokenError, readConfig, saveToken } from "./client.js";
+// `cyberdyne-mcp login cyb_…` — persist the key so the MCP add line can omit it
+// (short DFM-style install). Runs before the server boots, then exits.
+if (process.argv[2] === "login") {
+    const token = process.argv[3]?.trim();
+    if (!token || !token.startsWith("cyb_")) {
+        console.error("Usage: npx cyberdyne-mcp login cyb_<your-key>\n" +
+            "Get your key at https://app.cyberdyne-os.xyz → Agent Console → Generate API key.");
+        process.exit(1);
+    }
+    const path = saveToken(token);
+    console.error(`✓ Saved your CYBERDYNE key to ${path}.\n` +
+        "Now run:  claude mcp add cyberdyne -- npx -y cyberdyne-mcp");
+    process.exit(0);
+}
 const config = readConfig();
 const client = new CyberdyneClient(config);
 // ---- Result helpers -------------------------------------------------------
@@ -185,5 +199,5 @@ server.registerPrompt("quickstart", {
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error(`CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
-    (config.token ? "" : " (no CYBERDYNE_IDENTITY_TOKEN set; networked tools will error until you set it)") +
+    (config.token ? "" : " (no key — run `npx cyberdyne-mcp login cyb_…` or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
     ". Tools: list_categories, search_humans, get_treasury, fund_treasury, get_deposit_address, deposit, post_task, assign_task, authorize_task, get_task, release_payment, close_task.");

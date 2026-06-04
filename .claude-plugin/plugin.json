@@ -19,7 +19,7 @@
   "mcpServers": {
     "cyberdyne": {
       "command": "npx",
-      "args": ["-y", "cyberdyne-mcp"],
+      "args": ["-y", "cyberdyne-mcp@0.5.0"],
       "env": {
         "CYBERDYNE_IDENTITY_TOKEN": "${CYBERDYNE_IDENTITY_TOKEN}"
       }
