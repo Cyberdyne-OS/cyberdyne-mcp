@@ -20,7 +20,7 @@
 
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readFileSync, writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { readFileSync, mkdirSync, openSync, writeSync, closeSync, fchmodSync, constants as FS } from "node:fs";
 
 export const DEFAULT_API_URL = "https://app.cyberdyne-os.xyz";
 
@@ -34,32 +34,47 @@ export function configPath(): string {
   return join(homedir(), ".cyberdyne", "config.json");
 }
 
-function readConfigFile(): { identity_token?: string; api_url?: string } {
+// Only the key is persisted. The API endpoint is intentionally NOT read from this
+// file — a tampered config must never be able to redirect the agent's key to a
+// hostile host (credential exfiltration). The endpoint overrides via env only.
+function readSavedToken(): string | undefined {
   try {
-    return JSON.parse(readFileSync(configPath(), "utf8"));
+    const parsed = JSON.parse(readFileSync(configPath(), "utf8")) as { identity_token?: unknown };
+    return typeof parsed?.identity_token === "string" ? parsed.identity_token.trim() : undefined;
   } catch {
-    return {};
+    return undefined;
   }
 }
 
-/** Persist the agent key to ~/.cyberdyne/config.json (0600). Returns the path. */
+/** Persist the agent key to ~/.cyberdyne/config.json. Returns the path. */
 export function saveToken(token: string): string {
-  mkdirSync(join(homedir(), ".cyberdyne"), { recursive: true });
+  // Owner-only dir + atomic 0600 create (no world-readable window / TOCTOU), and
+  // O_NOFOLLOW so a planted symlink at the path can't redirect the write.
+  mkdirSync(join(homedir(), ".cyberdyne"), { recursive: true, mode: 0o700 });
   const p = configPath();
-  writeFileSync(p, JSON.stringify({ ...readConfigFile(), identity_token: token.trim() }, null, 2));
+  const contents = JSON.stringify({ identity_token: token.trim() }, null, 2);
+  let flags = FS.O_WRONLY | FS.O_CREAT | FS.O_TRUNC;
+  if (typeof FS.O_NOFOLLOW === "number") flags |= FS.O_NOFOLLOW;
+  let fd: number;
   try {
-    chmodSync(p, 0o600);
+    fd = openSync(p, flags, 0o600);
   } catch {
-    /* best-effort on platforms without POSIX modes */
+    // Platforms without O_NOFOLLOW semantics — fall back without it.
+    fd = openSync(p, FS.O_WRONLY | FS.O_CREAT | FS.O_TRUNC, 0o600);
+  }
+  try {
+    fchmodSync(fd, 0o600); // tighten perms on the open fd (covers a pre-existing file), race-free
+    writeSync(fd, contents);
+  } finally {
+    closeSync(fd);
   }
   return p;
 }
 
-/** Resolve config: env first, then the saved login. `token` may be undefined. */
+/** Resolve config: token from env first, then the saved login. URL from env only. */
 export function readConfig(env: NodeJS.ProcessEnv = process.env): CyberdyneConfig {
-  const file = readConfigFile();
-  const apiUrl = (env.CYBERDYNE_API_URL || file.api_url || DEFAULT_API_URL).replace(/\/+$/, "");
-  const token = env.CYBERDYNE_IDENTITY_TOKEN?.trim() || file.identity_token?.trim() || undefined;
+  const apiUrl = (env.CYBERDYNE_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
+  const token = env.CYBERDYNE_IDENTITY_TOKEN?.trim() || readSavedToken() || undefined;
   return { apiUrl, token };
 }
 

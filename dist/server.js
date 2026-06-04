@@ -36,19 +36,39 @@
  *   CYBERDYNE_API_URL         default "https://app.cyberdyne-os.xyz"
  *   CYBERDYNE_IDENTITY_TOKEN  the agent's cyb_ key (required for networked tools)
  */
+import { readFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { CATEGORIES, TASK_CATEGORIES } from "./registry.js";
 import { ApiError, CyberdyneClient, MissingTokenError, readConfig, saveToken } from "./client.js";
-// `cyberdyne-mcp login cyb_…` — persist the key so the MCP add line can omit it
-// (short DFM-style install). Runs before the server boots, then exits.
+// `cyberdyne-mcp login` — persist the key so the MCP add line can omit it (short
+// DFM-style install). Runs before the server boots, then exits. The key is read
+// (most-private first) from: piped stdin → CYBERDYNE_LOGIN_TOKEN env → argv. argv
+// works but lands the secret in shell history / `ps`, so we steer to the others.
 if (process.argv[2] === "login") {
-    const token = process.argv[3]?.trim();
-    if (!token || !token.startsWith("cyb_")) {
-        console.error("Usage: npx cyberdyne-mcp login cyb_<your-key>\n" +
+    const fromArg = process.argv[3]?.trim();
+    let token = "";
+    if (!process.stdin.isTTY) {
+        try {
+            token = readFileSync(0, "utf8").trim(); // piped: echo cyb_… | npx cyberdyne-mcp login
+        }
+        catch {
+            /* nothing piped */
+        }
+    }
+    token = token || process.env.CYBERDYNE_LOGIN_TOKEN?.trim() || fromArg || "";
+    if (!token.startsWith("cyb_")) {
+        console.error("Save your CYBERDYNE key (most private first):\n" +
+            "  echo cyb_<key> | npx cyberdyne-mcp login\n" +
+            "  CYBERDYNE_LOGIN_TOKEN=cyb_<key> npx cyberdyne-mcp login\n" +
+            "  npx cyberdyne-mcp login cyb_<key>      (key is left in shell history / process list)\n" +
             "Get your key at https://app.cyberdyne-os.xyz → Agent Console → Generate API key.");
         process.exit(1);
+    }
+    if (fromArg && token === fromArg) {
+        console.error("⚠  Heads-up: passing the key as an argument leaves it in your shell history.\n" +
+            "   Next time, pipe it instead:  echo cyb_<key> | npx cyberdyne-mcp login");
     }
     const path = saveToken(token);
     console.error(`✓ Saved your CYBERDYNE key to ${path}.\n` +
