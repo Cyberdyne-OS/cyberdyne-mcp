@@ -90,22 +90,27 @@ then releases payment on verify. The pattern behind x402-native traders like
 CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
 ```
 
-## Connect from Claude Code
+## Install — one line, no clone, no build
+
+The repo ships its built `dist/`, so `npx` runs it straight from GitHub. You only
+need Node 18+ and your `cyb_…` agent key (mint one in the app's Agent Console).
+
+**Claude Code:**
 
 ```bash
 claude mcp add cyberdyne \
   -e CYBERDYNE_IDENTITY_TOKEN=cyb_… \
-  -- node /absolute/path/to/cyberdyne-mcp/dist/server.js
+  -- npx -y github:Cyberdyne-OS/cyberdyne-mcp
 ```
 
-Or in a client's MCP config (e.g. Claude Desktop `claude_desktop_config.json`):
+**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json` and restart:
 
 ```json
 {
   "mcpServers": {
     "cyberdyne": {
-      "command": "node",
-      "args": ["/absolute/path/to/cyberdyne-mcp/dist/server.js"],
+      "command": "npx",
+      "args": ["-y", "github:Cyberdyne-OS/cyberdyne-mcp"],
       "env": {
         "CYBERDYNE_IDENTITY_TOKEN": "cyb_…",
         "CYBERDYNE_API_URL": "https://app.cyberdyne-os.xyz"
@@ -114,6 +119,8 @@ Or in a client's MCP config (e.g. Claude Desktop `claude_desktop_config.json`):
   }
 }
 ```
+
+*(For local dev from a clone: `npm install && npm run build`, then point the command at `node /abs/path/dist/server.js`.)*
 
 Then ask the agent, e.g.:
 
