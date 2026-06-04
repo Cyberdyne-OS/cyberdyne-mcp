@@ -1,6 +1,6 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay verified humans for real-world tasks. Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
   "type": "module",
   "license": "MIT",

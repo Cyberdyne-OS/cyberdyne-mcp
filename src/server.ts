@@ -9,7 +9,9 @@
  *   list_categories  — the static task taxonomy (no network)
  *   search_humans    — POST /api/a2a {search_humans}      → capability index
  *   get_treasury     — GET  /api/treasury                 → the agent's balance
- *   fund_treasury    — POST /api/treasury/fund            → demo top-up
+ *   fund_treasury    — POST /api/treasury/fund            → demo top-up (testnet only)
+ *   get_deposit_address — GET  /api/treasury/deposit      → where to send real USDC (live)
+ *   deposit          — POST /api/treasury/deposit         → credit treasury from a real USDC tx
  *   post_task        — POST /api/tasks                    → open a task
  *   assign_task      — POST /api/tasks/[id]/assign        → pick a human (→ authIntent)
  *   authorize_task   — POST /api/tasks/[id]/authorize     → open the escrow hold
@@ -24,7 +26,8 @@
  *
  * The HUMAN submit-proof step happens in the app/UI (human-only — agents cannot
  * submit on a human's behalf). So an agent's end-to-end flow is:
- *   fund_treasury → post_task → (humans claim, or assign_task picks one)
+ *   (live: get_deposit_address → send USDC → deposit) → post_task
+ *     → (humans claim, or assign_task picks one)
  *     → assign_task → authorize_task (open the hold)
  *     → poll get_task until a submission appears
  *     → release_payment (approve → capture; else reject → refund)
@@ -104,10 +107,30 @@ server.tool(
 
 server.tool(
   "fund_treasury",
-  "Demo top-up: add USD to the agent's treasury balance (creating the treasury row if absent). This is the testnet/demo deposit; the real x402 deposit rail lands later.",
+  "Demo top-up (TESTNET/DEMO ONLY): add USD to the treasury balance. DISABLED when the platform is live (returns 403 funding_disabled) — on the live rail fund with REAL USDC via get_deposit_address + deposit instead.",
   { amount_usd: z.number().positive().describe("USD to add to the treasury balance.") },
   async ({ amount_usd }) =>
     guard(() => client.rest("POST", "/api/treasury/fund", { body: { amount_usd } })),
+);
+
+server.tool(
+  "get_deposit_address",
+  "Get the on-chain address to fund your treasury with REAL USDC (live rail). Returns { deposit_address, chain_id, usdc_address, decimals }. Send USDC from your VERIFIED wallet to deposit_address on Base, then call `deposit` with the tx hash to credit your treasury.",
+  {},
+  async () => guard(() => client.rest("GET", "/api/treasury/deposit")),
+);
+
+server.tool(
+  "deposit",
+  "Credit your treasury from a REAL on-chain USDC deposit (live rail; the real-money replacement for fund_treasury). First send USDC to the address from get_deposit_address (from your verified wallet), then call this with the transaction hash. The transfer is verified on-chain (to = platform wallet, from = your wallet) and credited exactly once — resubmitting the same tx never double-credits.",
+  {
+    tx_hash: z
+      .string()
+      .regex(/^0x[0-9a-fA-F]{64}$/)
+      .describe("The Base tx hash of your USDC transfer to the deposit address."),
+  },
+  async ({ tx_hash }) =>
+    guard(() => client.rest("POST", "/api/treasury/deposit", { body: { tx_hash } })),
 );
 
 server.tool(
@@ -223,5 +246,5 @@ await server.connect(transport);
 console.error(
   `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no CYBERDYNE_IDENTITY_TOKEN set; networked tools will error until you set it)") +
-    ". Tools: list_categories, search_humans, get_treasury, fund_treasury, post_task, assign_task, authorize_task, get_task, release_payment, close_task.",
+    ". Tools: list_categories, search_humans, get_treasury, fund_treasury, get_deposit_address, deposit, post_task, assign_task, authorize_task, get_task, release_payment, close_task.",
 );

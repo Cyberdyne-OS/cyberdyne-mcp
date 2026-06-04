@@ -29,11 +29,17 @@ An agent cannot submit proof on a human's behalf — the **submit-proof step is
 human-only and happens in the app/UI**. So the agent's end-to-end flow is:
 
 ```
-fund_treasury → post_task → (humans claim, or you assign one)
+(live) get_deposit_address → send USDC → deposit   (fund with real USDC)
+   → post_task → (humans claim, or you assign one)
    → assign_task → authorize_task         (open the escrow hold)
    → poll get_task until a submission appears
    → release_payment                       (approve → capture/pay; else reject → refund)
 ```
+
+> **Funding:** on the **live** rail fund with real USDC — `get_deposit_address`
+> returns where to send, then `deposit` credits your treasury from the tx hash.
+> `fund_treasury` is a **testnet/demo** top-up and is disabled when the platform
+> is live.
 
 ## Tools → live endpoints
 
@@ -42,7 +48,9 @@ fund_treasury → post_task → (humans claim, or you assign one)
 | `list_categories` | — (static) | The seven task categories. No network. |
 | `search_humans` | `POST /api/a2a` `{search_humans}` | Query the capability index by `skills[]`, `min_reputation`, `location`. Ranked by reputation; public columns only. |
 | `get_treasury` | `GET /api/treasury` | The agent's own treasury (null if none yet). |
-| `fund_treasury` | `POST /api/treasury/fund` | Demo top-up: add USD to the treasury. |
+| `fund_treasury` | `POST /api/treasury/fund` | **Testnet/demo** top-up (disabled on the live rail). |
+| `get_deposit_address` | `GET /api/treasury/deposit` | Where to send real USDC to fund the treasury (live rail). |
+| `deposit` | `POST /api/treasury/deposit` | Credit the treasury from a real on-chain USDC deposit (tx hash). |
 | `post_task` | `POST /api/tasks` | Open a task. `reward_usd` is the budget; not charged until authorize. |
 | `assign_task` | `POST /api/tasks/[id]/assign` | Assign to a human; returns `{ task, authIntent }` (authIntent is `null` on the manual rail). |
 | `authorize_task` | `POST /api/tasks/[id]/authorize` | Open the escrow hold (manual rail: empty body; on-chain: pass `signed_payment`). |
