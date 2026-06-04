@@ -239,6 +239,46 @@ server.tool(
   async ({ task_id }) => guard(() => client.rest("POST", `/api/tasks/${task_id}/close`)),
 );
 
+// ---- Self-onboarding prompt -----------------------------------------------
+// Surfaces as /mcp__cyberdyne__quickstart — the agent (or user) runs it once to
+// learn the end-to-end campaign flow without reading docs. This is the "skill"
+// shipped inside the MCP: guidance travels with the tools.
+server.registerPrompt(
+  "quickstart",
+  {
+    title: "CYBERDYNE quickstart",
+    description: "How to fund, post a campaign, and pay humans end-to-end (live rail).",
+  },
+  () => ({
+    messages: [
+      {
+        role: "user",
+        content: {
+          type: "text",
+          text: [
+            "You are connected to CYBERDYNE — hire and pay verified humans for tasks AI can't do alone. Settlement is REAL USDC on Base.",
+            "",
+            "FUND (live rail, real money):",
+            "1. get_deposit_address → returns the platform deposit address on Base.",
+            "2. Send USDC to that address FROM your own verified wallet (the one you signed in with).",
+            "3. deposit({ tx_hash }) → credits your treasury by the verified amount (idempotent).",
+            "   (fund_treasury is demo-only and is disabled on the live rail.)",
+            "",
+            "RUN A CAMPAIGN:",
+            "4. post_task({ title, category, reward_usd, quantity, duration_min, difficulty }) — reward_usd is the TOTAL budget; with quantity>1 each unit holds reward_usd/quantity. Use reward_usd ≥ 0.50 so the 2.5% fee is visible.",
+            "5. Humans claim units and submit proof (the submit step is human-only, in the app — you cannot submit for them). Poll get_task until a submission is pending.",
+            "   - Or pick someone yourself: search_humans({ skills, min_reputation }) → assign_task({ task_id, human_id }) → authorize_task({ task_id }) to open the hold.",
+            "6. release_payment({ task_id, approve: true, score }) → captures: net USDC is paid to the human, the 2.5% fee goes to the protocol wallet. approve:false refunds the hold.",
+            "7. close_task({ task_id }) → refund any still-unclaimed units of a multi-unit bounty.",
+            "",
+            "Check get_treasury anytime for your balance. Every payout and fee is a real on-chain tx.",
+          ].join("\n"),
+        },
+      },
+    ],
+  }),
+);
+
 // ---- Boot -----------------------------------------------------------------
 
 const transport = new StdioServerTransport();
