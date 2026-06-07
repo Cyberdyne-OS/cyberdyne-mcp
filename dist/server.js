@@ -114,7 +114,7 @@ async function guard(fn) {
     }
 }
 // ---- Server ---------------------------------------------------------------
-const server = new McpServer({ name: "cyberdyne", version: "0.5.3" });
+const server = new McpServer({ name: "cyberdyne", version: "0.5.4" });
 server.tool("list_categories", "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
 server.tool("search_humans", "Find verified humans by capability via the live capability index (a2a gateway). Filters are optional and combine (AND). Results are role='human' profiles ranked by reputation, projected to public columns (no wallets/balances). Note: `skills` is an array.", {
     skills: z

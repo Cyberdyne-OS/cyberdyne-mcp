@@ -45,13 +45,20 @@ const ERC20_TRANSFER_ABI = [
  */
 export async function payDeployFee(params) {
     const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
-    return wallet.writeContract({
+    const hash = await wallet.writeContract({
         address: params.token,
         abi: ERC20_TRANSFER_ABI,
         functionName: "transfer",
         args: [params.recipient, parseUnits(params.amountUsd.toFixed(6), 6)],
         chain: chain(),
     });
+    // Wait until the fee tx is ≥1 block deep BEFORE returning, so the platform's
+    // verifyFeePayment (which requires 1 confirmation, anti-reorg) accepts it on the
+    // authorize call that immediately follows. Without this the agent pays the fee
+    // then gets a 402 fee_unverified because the tx isn't mined/deep enough yet.
+    const pub = createPublicClient({ chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    await pub.waitForTransactionReceipt({ hash, confirmations: 2 });
+    return hash;
 }
 export function hasEvmKey() {
     return !!process.env.CYBERDYNE_EVM_PRIVATE_KEY;

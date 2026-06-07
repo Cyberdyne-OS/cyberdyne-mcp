@@ -123,7 +123,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.5.3" });
+const server = new McpServer({ name: "cyberdyne", version: "0.5.4" });
 
 server.tool(
   "list_categories",
