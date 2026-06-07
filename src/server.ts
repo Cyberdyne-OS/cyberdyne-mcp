@@ -16,7 +16,8 @@
  *   assign_task      — POST /api/tasks/[id]/assign        → pick a human (→ authIntent)
  *   authorize_task   — POST /api/tasks/[id]/authorize     → open the escrow hold
  *   get_task         — GET  /api/tasks/[id]               → status + submissions/claims
- *   release_payment  — POST /api/tasks/[id]/release       → capture (pay) or reject
+ *   release_payment  — POST /api/tasks/[id]/release       → direct-hire: capture (pay) or reject
+ *   review_submission — POST /api/submissions/[id]/review → pool/FCFS: approve/reject one submission
  *   close_task       — POST /api/tasks/[id]/close         → close a (multi-unit) bounty
  *
  * Auth: every networked tool sends the agent's `cyb_…` key. The REST routes take
@@ -25,12 +26,26 @@
  * `identity_token`.
  *
  * The HUMAN submit-proof step happens in the app/UI (human-only — agents cannot
- * submit on a human's behalf). So an agent's end-to-end flow is:
- *   (live: get_deposit_address → send USDC → deposit) → post_task
- *     → (humans claim, or assign_task picks one)
- *     → assign_task → authorize_task (open the hold)
- *     → poll get_task until a submission appears
- *     → release_payment (approve → capture; else reject → refund)
+ * submit on a human's behalf). There are TWO settlement flows:
+ *
+ *   FLOW A — DIRECT HIRE (the path that works TODAY on the live custodial USDC
+ *   rail: real deposit → escrow → withdraw on Base mainnet). You pick one human:
+ *     get_deposit_address → send USDC → deposit  (fund the treasury)
+ *       → post_task → search_humans → assign_task (→ authIntent)
+ *       → authorize_task (open the escrow hold)
+ *       → poll get_task until a submission is pending
+ *       → release_payment (approve → capture/pay; else reject → refund)
+ *
+ *   FLOW B — POOL / FCFS BOUNTY (non-custodial pool escrow). Post a multi-unit
+ *   bounty, freeze the whole budget once, and let any eligible human claim+submit
+ *   first-come-first-served; you approve each unit. This rail is BUILT but GATED
+ *   OFF today (server env ESCROW_POOL is not enabled), pending certification — so
+ *   real-money non-custodial pool payouts are NOT live yet. When the server
+ *   enables it, post_task returns an `authIntent` + a separate `deployFee`:
+ *     post_task (quantity>1) → authorize_task (sign the budget + pay the deploy fee)
+ *       → humans claim+submit FCFS → poll get_task
+ *       → review_submission per pending submission (approve → capture one unit;
+ *         reject → the slot reopens) → close_task to refund unfilled units.
  *
  * Config comes from the environment (see src/client.ts):
  *   CYBERDYNE_API_URL         default "https://app.cyberdyne-os.xyz"
@@ -44,7 +59,7 @@ import { CATEGORIES, TASK_CATEGORIES } from "./registry.js";
 import { ApiError, CyberdyneClient, MissingTokenError, readConfig, saveToken } from "./client.js";
 
 // `cyberdyne-mcp login` — persist the key so the MCP add line can omit it (short
-// DFM-style install). Runs before the server boots, then exits. The key is read
+// one-time-login install). Runs before the server boots, then exits. The key is read
 // (most-private first) from: piped stdin → CYBERDYNE_LOGIN_TOKEN env → argv. argv
 // works but lands the secret in shell history / `ps`, so we steer to the others.
 if (process.argv[2] === "login") {
@@ -175,7 +190,7 @@ server.tool(
 
 server.tool(
   "post_task",
-  "Open a task on the marketplace. Funds are NOT charged at post — the escrow hold opens later at authorize_task. On the manual rail the platform only checks the treasury can cover the budget (402 insufficient_treasury otherwise). `reward_usd` is the total budget; with quantity>1 each unit holds reward_usd/quantity. Returns the created task (with its id).",
+  "Open a task on the marketplace. Funds are NOT charged at post — the escrow hold opens later at authorize_task. `reward_usd` is the total budget; with quantity>1 each unit holds reward_usd/quantity (each unit must be >= $0.01). Returns the created task (with its id). DIRECT-HIRE / custodial rail (the path live today): the platform checks the prefunded treasury can cover the budget (402 insufficient_treasury otherwise); response is { task }. POOL/FCFS rail (only when the server enables it): response also includes `authIntent` (the budget authorization to sign) and `deployFee` { usd, bps, recipient, token } (a SEPARATE non-refundable fee tx) — pass both to authorize_task.",
   {
     title: z.string().min(2).max(160).describe("Short task title."),
     category: z.enum(TASK_CATEGORIES),
@@ -204,20 +219,41 @@ server.tool(
 
 server.tool(
   "authorize_task",
-  "Open the escrow hold for an assigned task (poster-only). On the manual rail the body is empty (logical treasury debit). On an on-chain rail pass `signed_payment` — the base64 agent-signed auth-capture payload from the authIntent returned by assign_task. Idempotent once held.",
+  "Open the escrow hold for a task. CUSTODIAL/MANUAL rail (the path live today): call with just { task_id } — the prefunded treasury is debited into a logical escrow hold, no signature needed. TRUSTLESS on-chain DIRECT-HIRE rail: the agent signs an auth-capture authorization — if CYBERDYNE_EVM_PRIVATE_KEY is set pass `auth_intent` (the authIntent from assign_task) and the MCP signs automatically, else pass a pre-signed `signed_payment`. POOL/FCFS rail (only when the server enables it): pass BOTH `auth_intent` (from post_task) AND `deploy_fee` (the deployFee object from post_task) — the MCP signs the budget and pays the separate 2.5% USDC / 5% other-token fee tx from its wallet, then submits both; or pass a pre-signed `signed_payment` and a pre-paid `fee_tx_hash`. Idempotent once held.",
   {
     task_id: z.string().uuid(),
-    signed_payment: z
-      .string()
+    signed_payment: z.string().optional().describe("Pre-signed base64 auth-capture payload (external/Bankr signer)."),
+    auth_intent: z.unknown().optional().describe("The authIntent from assign_task/post — required for MCP wallet auto-signing."),
+    deploy_fee: z
+      .unknown()
       .optional()
-      .describe("On-chain rail only: base64-encoded signed auth-capture payload."),
+      .describe("POOL rail: the deployFee object {usd,recipient,token} from post_task — the MCP auto-pays it."),
+    fee_tx_hash: z.string().optional().describe("POOL rail: hash of an already-paid deploy-fee tx (skips auto-pay)."),
   },
-  async ({ task_id, signed_payment }) =>
-    guard(() =>
-      client.rest("POST", `/api/tasks/${task_id}/authorize`, {
-        body: signed_payment ? { signedPayment: signed_payment } : {},
-      }),
-    ),
+  async ({ task_id, signed_payment, auth_intent, deploy_fee, fee_tx_hash }) =>
+    guard(async () => {
+      let payload = signed_payment;
+      let feeTx = fee_tx_hash;
+      if ((!payload && auth_intent) || (!feeTx && deploy_fee)) {
+        const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
+        if (hasEvmKey()) {
+          if (!payload && auth_intent) {
+            const requirements = (auth_intent as { requirements?: unknown }).requirements ?? auth_intent;
+            payload = await signAuthCapture(requirements);
+          }
+          if (!feeTx && deploy_fee) {
+            const f = deploy_fee as { usd: number; recipient: string; token: string };
+            feeTx = await payDeployFee({ amountUsd: f.usd, recipient: f.recipient, token: f.token });
+          }
+        }
+      }
+      return client.rest("POST", `/api/tasks/${task_id}/authorize`, {
+        body: {
+          ...(payload ? { signedPayment: payload } : {}),
+          ...(feeTx ? { fee_tx_hash: feeTx } : {}),
+        },
+      });
+    }),
 );
 
 server.tool(
@@ -229,7 +265,7 @@ server.tool(
 
 server.tool(
   "release_payment",
-  "Settle a submitted proof (poster-only). approve:true → CAPTURE: pay the human net of platform fee. approve:false → REJECT/REFUND the held escrow. Requires the `submission_id` to act on; if omitted, the gateway fetches the task and uses the latest pending submission (and errors if none is pending yet — poll get_task first).",
+  "DIRECT-HIRE settle (poster-only): settle a submitted proof for a single-human task (the custodial-rail path live today). approve:true → CAPTURE: pay the human net of the platform fee. approve:false → REJECT/REFUND the held escrow. Requires the `submission_id` to act on; if omitted, the gateway fetches the task and uses the latest pending submission (and errors if none is pending yet — poll get_task first). For POOL/FCFS bounties use review_submission instead (this path captures the whole task hold, not one unit).",
   {
     task_id: z.string().uuid(),
     approve: z.boolean().describe("true = proof meets criteria → pay; false = reject/refund."),
@@ -273,6 +309,29 @@ server.tool(
 );
 
 server.tool(
+  "review_submission",
+  "POOL / FCFS settle (poster-only): approve or reject ONE submission on a pool bounty. approve:true → CAPTURE one unit from the frozen pool budget to the human and consume a slot; approve:false → reject (the slot reopens for the next submitter — no spot-blocking). For single-human direct-hire tasks use release_payment instead. Poll get_task for pending submissions. NOTE: the pool/FCFS rail is gated off on the server until certification — this tool acts on pool tasks once the operator enables that rail.",
+  {
+    submission_id: z.string().uuid().describe("The pending submission to review (from get_task)."),
+    approve: z.boolean().describe("true = proof meets criteria → capture one unit; false = reject (slot reopens)."),
+    score: z.number().int().min(1).max(5).optional().describe("Rating of the human's work (1–5)."),
+    comment: z.string().max(280).optional().describe("Optional feedback note on the human."),
+    reject_reason: z.string().max(1000).optional().describe("Why the proof was rejected (approve:false)."),
+  },
+  async ({ submission_id, approve, score, comment, reject_reason }) =>
+    guard(() =>
+      client.rest("POST", `/api/submissions/${submission_id}/review`, {
+        body: {
+          approve,
+          ...(score != null ? { score } : {}),
+          ...(comment ? { comment } : {}),
+          ...(reject_reason ? { reject_reason } : {}),
+        },
+      }),
+    ),
+);
+
+server.tool(
   "close_task",
   "Close a (multi-unit) bounty (poster-only): refund every still-held unit to the agent, mark unclaimed units done, and stop further claims. Idempotent on an already-closed task.",
   { task_id: z.string().uuid() },
@@ -287,7 +346,7 @@ server.registerPrompt(
   "quickstart",
   {
     title: "CYBERDYNE quickstart",
-    description: "How to fund, post a campaign, and pay humans end-to-end (live rail).",
+    description: "How to fund, post a task, and pay humans end-to-end — both the direct-hire and pool/FCFS flows.",
   },
   () => ({
     messages: [
@@ -296,22 +355,28 @@ server.registerPrompt(
         content: {
           type: "text",
           text: [
-            "You are connected to CYBERDYNE — hire and pay verified humans for tasks AI can't do alone. Settlement is REAL USDC on Base.",
+            "You are connected to CYBERDYNE — hire and pay verified humans for tasks AI can't do alone. The live settlement rail is REAL USDC on Base (custodial: deposit -> escrow -> withdraw). The human submit-proof step is human-only, in the app; you drive everything else.",
             "",
-            "FUND (live rail, real money):",
-            "1. get_deposit_address → returns the platform deposit address on Base.",
-            "2. Send USDC to that address FROM your own verified wallet (the one you signed in with).",
-            "3. deposit({ tx_hash }) → credits your treasury by the verified amount (idempotent).",
-            "   (fund_treasury is demo-only and is disabled on the live rail.)",
+            "FUND (real money, custodial rail):",
+            "1. get_deposit_address -> the platform deposit address on Base.",
+            "2. Send USDC to it FROM your own verified wallet (the one you signed in with).",
+            "3. deposit({ tx_hash }) -> credits your treasury by the verified amount (idempotent).",
+            "   (fund_treasury is demo/testnet only and is disabled on the live rail.)",
+            "Check get_treasury anytime for your balance.",
             "",
-            "RUN A CAMPAIGN:",
-            "4. post_task({ title, category, reward_usd, quantity, duration_min, difficulty }) — reward_usd is the TOTAL budget; with quantity>1 each unit holds reward_usd/quantity. Use reward_usd ≥ 0.50 so the 2.5% fee is visible.",
-            "5. Humans claim units and submit proof (the submit step is human-only, in the app — you cannot submit for them). Poll get_task until a submission is pending.",
-            "   - Or pick someone yourself: search_humans({ skills, min_reputation }) → assign_task({ task_id, human_id }) → authorize_task({ task_id }) to open the hold.",
-            "6. release_payment({ task_id, approve: true, score }) → captures: net USDC is paid to the human, the 2.5% fee goes to the protocol wallet. approve:false refunds the hold.",
-            "7. close_task({ task_id }) → refund any still-unclaimed units of a multi-unit bounty.",
+            "FLOW A - DIRECT HIRE (works today): pick one human, hold, then pay.",
+            "4. post_task({ title, category, reward_usd, duration_min, difficulty }). Returns { task }. Use reward_usd >= 0.50 so the 2.5% fee is visible; each unit must be >= $0.01.",
+            "5. search_humans({ skills, min_reputation }) -> assign_task({ task_id, human_id }) -> authorize_task({ task_id }) to open the escrow hold (custodial rail = no signature; just task_id).",
+            "6. Poll get_task until a submission is pending (the human's proof).",
+            "7. release_payment({ task_id, approve: true, score }) -> CAPTURE: net USDC to the human, the 2.5% fee to the protocol wallet. approve:false rejects and refunds the hold.",
             "",
-            "Check get_treasury anytime for your balance. Every payout and fee is a real on-chain tx.",
+            "FLOW B - POOL / FCFS BOUNTY: one frozen budget, many humans claim+submit first-come-first-served. NOTE: this non-custodial pool rail is BUILT but GATED OFF on the server today (pending certification) - real-money pool payouts are not live yet. When the operator enables it:",
+            "8. post_task({ ..., quantity: N }) -> returns { task, authIntent, deployFee }. authIntent is the budget authorization; deployFee is a SEPARATE non-refundable fee tx (2.5% USDC / 5% other token).",
+            "9. authorize_task({ task_id, auth_intent, deploy_fee }) -> with CYBERDYNE_EVM_PRIVATE_KEY set, the MCP signs the budget AND pays the deploy fee, then freezes the whole budget (or pass pre-made signed_payment + fee_tx_hash).",
+            "10. Humans claim+submit FCFS. Poll get_task; for each pending submission call review_submission({ submission_id, approve, score }) -> approve captures one unit; reject reopens the slot.",
+            "11. close_task({ task_id }) -> refund any still-unfilled units (the deploy fee is non-refundable).",
+            "",
+            "Every payout and fee on the live rail is a real on-chain transaction.",
           ].join("\n"),
         },
       },
@@ -326,5 +391,5 @@ await server.connect(transport);
 console.error(
   `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no key — run `npx cyberdyne-mcp login cyb_…` or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
-    ". Tools: list_categories, search_humans, get_treasury, fund_treasury, get_deposit_address, deposit, post_task, assign_task, authorize_task, get_task, release_payment, close_task.",
+    ". Tools (13): list_categories, search_humans, get_treasury, fund_treasury, get_deposit_address, deposit, post_task, assign_task, authorize_task, get_task, release_payment, review_submission, close_task.",
 );

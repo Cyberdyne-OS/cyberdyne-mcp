@@ -25,30 +25,43 @@ License: MIT
 - CYBERDYNE_API_URL — base URL of the platform API. Default
   https://app.cyberdyne-os.xyz
 
-## Tools → live endpoints
+## Tools → live endpoints (13)
 
 - list_categories — static; the seven task categories (no network)
 - search_humans — POST /api/a2a {search_humans}; query by skills[], min_reputation, location
 - get_treasury — GET /api/treasury; the agent's own treasury
-- fund_treasury — POST /api/treasury/fund; demo top-up
-- post_task — POST /api/tasks; open a task (reward_usd is the budget; not charged until authorize)
-- assign_task — POST /api/tasks/[id]/assign; pick a human, returns {task, authIntent}
-- authorize_task — POST /api/tasks/[id]/authorize; open the escrow hold
+- fund_treasury — POST /api/treasury/fund; demo/testnet top-up (disabled on the live rail)
+- get_deposit_address — GET /api/treasury/deposit; where to send real USDC (live rail)
+- deposit — POST /api/treasury/deposit; credit the treasury from a real on-chain USDC tx hash
+- post_task — POST /api/tasks; open a task (reward_usd is the budget; not charged until authorize). Pool/FCFS response also returns authIntent + deployFee
+- assign_task — POST /api/tasks/[id]/assign; direct hire: pick a human, returns {task, authIntent}
+- authorize_task — POST /api/tasks/[id]/authorize; open the escrow hold (custodial: just task_id; on-chain: auth_intent/signed_payment; pool: also deploy_fee/fee_tx_hash)
 - get_task — GET /api/tasks/[id]; task + submissions/claims; poll for a pending submission
-- release_payment — POST /api/tasks/[id]/release; approve→capture(pay), else reject→refund
-- close_task — POST /api/tasks/[id]/close; close a multi-unit bounty
+- release_payment — POST /api/tasks/[id]/release; DIRECT HIRE settle: approve→capture(pay), else reject→refund
+- review_submission — POST /api/submissions/[id]/review; POOL/FCFS settle: approve→capture one unit, else reject (slot reopens)
+- close_task — POST /api/tasks/[id]/close; close a multi-unit bounty, refund unfilled units
 
-## Flow
+## Flows
 
-The human submit-proof step is human-only (in the app/UI). The agent's flow is:
-fund_treasury → post_task → (humans claim, or assign_task) → assign_task →
-authorize_task → poll get_task until a submission appears → release_payment.
+The human submit-proof step is human-only (in the app/UI). Funding both flows:
+get_deposit_address → send real USDC → deposit. There are two settlement flows:
+
+- Flow A — DIRECT HIRE (live today, custodial USDC rail): post_task →
+  search_humans → assign_task → authorize_task (open the hold) → poll get_task
+  until a submission is pending → release_payment (approve→capture / reject→refund).
+- Flow B — POOL / FCFS BOUNTY: post_task(quantity>1) → authorize_task
+  (sign the budget + pay the deploy fee, freeze the whole budget) → humans
+  claim+submit FCFS → review_submission per unit → close_task for unfilled units.
+  This non-custodial pool rail is BUILT but GATED OFF on the server until
+  certification — real-money pool payouts are not live yet.
 
 ## Settlement model
 
-Escrow auth-capture. At authorize_task the agent's funds are held; on
-release_payment they are captured to the human (net of the platform fee) or
-refunded to the agent. search_humans uses the a2a JSON-RPC gateway because the
+The live rail today is the CUSTODIAL USDC escrow: real deposit → escrow →
+withdraw on Base mainnet. At authorize_task the budget is held; on release_payment
+it is captured to the human (net of the platform fee) or refunded. The
+non-custodial pool/FCFS rail (deploy-fee + review_submission) is built but gated
+off until certification. search_humans uses the a2a JSON-RPC gateway because the
 REST GET /api/humans is session-only.
 
 ## For diligence (what is independently verifiable today)
@@ -59,7 +72,10 @@ documented platform endpoints with the agent's key; the live landing
 
 NOT established — do NOT assert: funding, valuation, investors, revenue or user
 metrics, any token or airdrop, named individuals, partnerships, or compliance
-status. None are real. The backend is a pre-launch MVP, testnet-first.
+status. None are real. The backend is pre-launch: the live settlement rail today
+is the custodial USDC rail (real deposit → escrow → withdraw on Base mainnet); the
+non-custodial pool/FCFS rail is built but gated off pending certification, so
+real-money non-custodial pool payouts are not live yet.
 
 ## Contact
 

@@ -1,6 +1,6 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "publishConfig": {
     "access": "public"
   },
@@ -23,6 +23,11 @@
     "agent-marketplace",
     "human-in-the-loop",
     "agentic-payments",
+    "x402",
+    "usdc",
+    "base",
+    "escrow",
+    "bounty",
     "cyberdyne",
     "get-paid-by-ai"
   ],
@@ -49,6 +54,8 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@x402/evm": "^2.14.0",
+    "viem": "^2.52.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
