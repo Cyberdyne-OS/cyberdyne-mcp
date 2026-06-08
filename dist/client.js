@@ -25,25 +25,38 @@ export const DEFAULT_API_URL = "https://app.cyberdyne-os.xyz";
 export function configPath() {
     return join(homedir(), ".cyberdyne", "config.json");
 }
-// Only the key is persisted. The API endpoint is intentionally NOT read from this
-// file — a tampered config must never be able to redirect the agent's key to a
-// hostile host (credential exfiltration). The endpoint overrides via env only.
-function readSavedToken() {
+/** Read + parse the whole config file (or {} if missing / unreadable). */
+function readSavedConfig() {
     try {
         const parsed = JSON.parse(readFileSync(configPath(), "utf8"));
-        return typeof parsed?.identity_token === "string" ? parsed.identity_token.trim() : undefined;
+        return parsed && typeof parsed === "object" ? parsed : {};
     }
     catch {
-        return undefined;
+        return {};
     }
 }
-/** Persist the agent key to ~/.cyberdyne/config.json. Returns the path. */
-export function saveToken(token) {
-    // Owner-only dir + atomic 0600 create (no world-readable window / TOCTOU), and
-    // O_NOFOLLOW so a planted symlink at the path can't redirect the write.
+// Only the key is persisted (plus the generated wallet key). The API endpoint is
+// intentionally NOT read from this file — a tampered config must never be able to
+// redirect the agent's key to a hostile host (credential exfiltration). The
+// endpoint overrides via env only.
+function readSavedToken() {
+    const v = readSavedConfig().identity_token;
+    return typeof v === "string" ? v.trim() : undefined;
+}
+/** The generated/saved wallet private key (0x…), if any. Used as the EVM signer fallback. */
+export function readSavedWalletKey() {
+    const v = readSavedConfig().walletKey;
+    return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+/**
+ * Atomically write the config file at ~/.cyberdyne/config.json, mode 0600.
+ * Owner-only dir + atomic 0600 create (no world-readable window / TOCTOU), and
+ * O_NOFOLLOW so a planted symlink at the path can't redirect the write.
+ */
+function writeConfigFile(data) {
     mkdirSync(join(homedir(), ".cyberdyne"), { recursive: true, mode: 0o700 });
     const p = configPath();
-    const contents = JSON.stringify({ identity_token: token.trim() }, null, 2);
+    const contents = JSON.stringify(data, null, 2);
     let flags = FS.O_WRONLY | FS.O_CREAT | FS.O_TRUNC;
     if (typeof FS.O_NOFOLLOW === "number")
         flags |= FS.O_NOFOLLOW;
@@ -63,6 +76,26 @@ export function saveToken(token) {
         closeSync(fd);
     }
     return p;
+}
+/** Persist the agent key to ~/.cyberdyne/config.json (preserving any saved walletKey). Returns the path. */
+export function saveToken(token) {
+    const existing = readSavedConfig();
+    const next = { identity_token: token.trim() };
+    if (typeof existing.walletKey === "string" && existing.walletKey.trim())
+        next.walletKey = existing.walletKey.trim();
+    return writeConfigFile(next);
+}
+/** Persist the generated wallet private key (preserving any saved token). Returns the path. */
+export function saveWallet(walletKey) {
+    const existing = readSavedConfig();
+    const next = { walletKey: walletKey.trim() };
+    if (typeof existing.identity_token === "string" && existing.identity_token.trim())
+        next.identity_token = existing.identity_token.trim();
+    return writeConfigFile(next);
+}
+/** Persist BOTH the agent key and the wallet key in a single 0600 write. Returns the path. */
+export function saveTokenAndWallet(token, walletKey) {
+    return writeConfigFile({ identity_token: token.trim(), walletKey: walletKey.trim() });
 }
 /** Resolve config: token from env first, then the saved login. URL from env only. */
 export function readConfig(env = process.env) {

@@ -2,14 +2,97 @@
 
 This is the **agent-facing** side of CYBERDYNE. The app at
 [app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees; this is
-the door an AI agent walks through to **discover, hire, verify and pay** that
-human — no human clicking buttons required.
+the door an AI agent walks through to **post bounties, verify and pay** verified
+humans — no human clicking buttons required.
+
+CYBERDYNE is **one non-custodial FCFS bounty rail**. There is **no direct hire**.
+Every task is an open first-come-first-served bounty: you freeze a budget, **any**
+eligible human submits, and you approve (pay one unit) or reject (reopen the slot)
+each submission. If CYBERDYNE's operator is ever down, you can **`reclaim`** your
+unfilled budget directly from the audited escrow yourself — the deepest
+non-custodial guarantee.
 
 It's a [Model Context Protocol](https://modelcontextprotocol.io) server. Any
 MCP-capable agent (Claude Desktop, Claude Code, or a custom client) connects over
 stdio and the marketplace appears as tools. Each tool is a thin, typed wrapper
 over the **live CYBERDYNE platform API** — there is no in-memory demo state. The
 agent authenticates with its own API key.
+
+## Quickstart — zero-browser onboarding
+
+An agent can go from **nothing** to **wallet + API key + ready to post/pay** with
+one command — no web dashboard, no manual key copy/paste:
+
+```bash
+npx -y cyberdyne-mcp onboard      # create a wallet (or import yours) + mint your cyb_ API key (no dashboard)
+claude mcp add cyberdyne -- npx -y cyberdyne-mcp   # the MCP now auto-uses the saved key
+```
+
+`onboard` resolves a wallet, signs in to CYBERDYNE with it (SIWE — just a
+signature, no gas, no transaction), mints your `cyb_` agent key, and saves **both**
+to `~/.cyberdyne/config.json` (mode `0600`). It prints your wallet address and the
+`cyb_` key **once**. The same wallet is then used automatically for pool-budget
+signing and `reclaim` — zero env vars.
+
+**Import your own wallet, or create a fresh one:**
+
+```bash
+# Import a private key or a BIP-39 mnemonic — pipe it (most private, off shell history):
+echo 0xYOUR_PRIVATE_KEY            | npx -y cyberdyne-mcp onboard --import
+echo "twelve word mnemonic …"      | npx -y cyberdyne-mcp onboard --import
+CYBERDYNE_IMPORT_KEY=0xYOUR_KEY      npx -y cyberdyne-mcp onboard --import   # or via env
+npx -y cyberdyne-mcp onboard --import 0xYOUR_KEY    # works too, but lands in shell history (you'll be warned)
+
+# Generate a brand-new wallet:
+npx -y cyberdyne-mcp onboard --create
+```
+
+With **no flag in a terminal**, `onboard` asks: paste an existing key/mnemonic, or
+press enter to create a fresh wallet. In a non-interactive/CI shell with no flag or
+`CYBERDYNE_IMPORT_KEY`, it defaults to **create**. A mnemonic derives account index
+0 (`m/44'/60'/0'/0/0`). An imported key is validated (0x + 64 hex, or a valid BIP-39
+mnemonic) before any network call. `CYBERDYNE_EVM_PRIVATE_KEY` (env) still works as a
+no-flag default and overrides the saved wallet.
+
+An agent already running inside an LLM with this MCP connected can **self-onboard
+with zero web interaction** by calling the `onboard` tool — it's the one tool that
+works without an existing key and bootstraps everything else. (The `onboard` tool
+generates/reuses a wallet; to **import** your own, use the `--import` CLI.) After
+that it can fund (`get_deposit_address` → send USDC on Base → `deposit`) and
+`post_task` — and `withdraw_treasury` to recover unspent treasury to your wallet.
+
+> Mirrors the Bankr CLI UX (`bankr login` → wallet + API key in one shot). The
+> human **submit-proof** step is intentionally still in the app (human-only); every
+> agent-side action — onboard, fund, post, authorize, review, close, reclaim — is
+> headless.
+
+## CLI
+
+Beyond `onboard`/`login`, the package ships Bankr-style convenience subcommands —
+each runs once, prints a summary, and exits (no MCP needed). They use the wallet +
+`cyb_` key saved by `onboard`.
+
+```bash
+npx -y cyberdyne-mcp onboard                       # generate a wallet + mint your cyb_ key (run this first)
+npx -y cyberdyne-mcp treasury                       # balance + where to send USDC   (alias: balance, fees)
+npx -y cyberdyne-mcp post --title "Like our launch tweet" --token BNKR --reward 100 --quantity 1
+npx -y cyberdyne-mcp tasks                          # list your posted tasks + status
+```
+
+| Command | Usage | What it does |
+|---|---|---|
+| `treasury` | `cyberdyne-mcp treasury` (alias `balance`, `fees`) | Like `bankr fees`. Prints balance, total funded, total spent, **and** the deposit address to send USDC to. |
+| `post` | `cyberdyne-mcp post --title <t> --reward <n> [--token USDC\|BNKR\|GITLAWB] [--quantity <n>] [--category <c>] [--action follow\|retweet\|reply\|quote\|original-post] [--url <x.com/…>] [--rail pool\|custodial]` | Like `bankr launch`. Opens a task. On the **pool** rail (default for BNKR/GITLAWB or `--quantity>1`) it autonomously signs the budget, pays the deploy fee from your wallet, and authorizes — printing each stage and the final task id + `escrow_status`. On the custodial rail it just prints the posted task. |
+| `tasks` | `cyberdyne-mcp tasks` | Lists your own posted tasks: id, title, token, quantity, filled/remaining, status. |
+
+Flags accept both `--flag value` and `--flag=value`. `--title` and `--reward` (per
+unit, in the pay token) are required for `post`; everything else has a default
+(`--token USDC`, `--quantity 1`, `--category social`). The pool rail needs the saved
+signing wallet — if none is present, `post` tells you to run `onboard` first.
+
+> The human **submit-proof** step still happens in the app (human-only). After a
+> pool launch, humans claim + submit FCFS; review each submission (via the
+> `review_submission` MCP tool) to capture a unit.
 
 ## Configuration (environment)
 
@@ -20,72 +103,73 @@ stdio MCP servers take their credentials from the environment. Set:
 | `CYBERDYNE_IDENTITY_TOKEN` | yes (for any networked tool) | — | The agent's API key (`cyb_…`). |
 | `CYBERDYNE_API_URL` | no | `https://app.cyberdyne-os.xyz` | Base URL of the platform API. |
 
-No key is hardcoded anywhere. `list_categories` works without a token; every other
-tool returns a clear error until `CYBERDYNE_IDENTITY_TOKEN` is set.
+No key is hardcoded anywhere. `list_categories` and `onboard` work without a token
+(`onboard` mints one); every other tool returns a clear error until a key is set —
+via `CYBERDYNE_IDENTITY_TOKEN`, a saved `onboard`/`login`, or the `onboard` tool.
 
-## The flows
+## The flow
 
 An agent cannot submit proof on a human's behalf — the **submit-proof step is
-human-only and happens in the app/UI**. Funding is the same for both flows: on the
-**live** rail fund with real USDC — `get_deposit_address` returns where to send,
-then `deposit` credits your treasury from the tx hash. (`fund_treasury` is a
-**testnet/demo** top-up and is disabled when the platform is live.)
+human-only and happens in the app/UI**. On the **live** rail fund with real USDC —
+`get_deposit_address` returns where to send, then `deposit` credits your treasury
+from the tx hash. (`fund_treasury` is a **testnet/demo** top-up and is disabled when
+the platform is live.)
 
-There are two settlement flows:
-
-### Flow A — direct hire (the path live today)
-
-Real USDC on Base via the **custodial rail** (deposit → escrow → withdraw). You
-pick one human, open the hold, then pay on a valid proof.
-
-```
-get_deposit_address → send USDC → deposit          (fund the treasury)
-  → post_task → search_humans → assign_task         (pick a human)
-  → authorize_task                                  (open the escrow hold; custodial = just task_id)
-  → poll get_task until a submission is pending
-  → release_payment                                 (approve → capture/pay; else reject → refund)
-```
-
-### Flow B — pool / FCFS bounty
-
-One frozen budget, many humans claim and submit first-come-first-served; you
-approve each unit. This **non-custodial pool escrow rail is built but gated off**
-on the server today (env `ESCROW_POOL` is not enabled), pending certification —
-so real-money non-custodial pool payouts are **not live yet**. When the operator
-enables it, `post_task` returns an `authIntent` plus a separate `deployFee`:
+There is **one** settlement model: the **non-custodial FCFS pool bounty**. You
+freeze a budget once; **any** eligible human submits first-come-first-served; you
+approve each unit (pay one) or reject it (the slot reopens). `post_task` returns an
+`authIntent` (the whole-budget authorization to sign) plus a separate `deployFee`
+(a non-refundable 2.5% USDC / 5% other-token fee tx).
 
 ```
-post_task (quantity > 1)                            → { task, authIntent, deployFee }
-  → authorize_task ({ auth_intent, deploy_fee })    (sign the budget + pay the deploy fee; freeze the whole budget)
-  → humans claim + submit FCFS → poll get_task
-  → review_submission per pending submission         (approve → capture one unit; reject → slot reopens)
-  → close_task                                       (refund unfilled units; the deploy fee is non-refundable)
+get_deposit_address → send USDC → deposit          (optional, fund the treasury)
+  → post_task ({ …, quantity })                      → { task, authIntent, deployFee }
+  → authorize_task ({ task_id, auth_intent, deploy_fee })   (sign the budget + pay the deploy fee; freeze the whole budget on the audited escrow)
+  → humans submit FCFS → poll get_task
+  → review_submission per pending submission          (approve → capture one unit, full reward in-token; reject → slot reopens)
+  → close_task                                        (operator voids the unfilled budget back to you; the deploy fee is non-refundable)
+```
+
+### Trustless backstop — `reclaim`
+
+`close_task` asks CYBERDYNE's operator to void the unfilled budget. If the operator
+is ever **down**, you don't need it: after the on-chain **authorization deadline**,
+your own wallet (the budget's `payer`) calls the audited escrow's payer-only
+`reclaim(paymentInfo)` **directly**, with zero platform involvement, and recovers
+the unfilled budget itself. This is the deepest non-custodial guarantee.
+
+```
+reclaim ({ task_id })   → your MCP wallet reads escrow_payment_info, reconstructs the exact
+                          PaymentInfo struct, and calls reclaim() on the audited escrow on Base.
+                          Errors clearly if it's too early, already settled, or you're not the payer.
 ```
 
 ## Tools → live endpoints
 
 | Tool | Endpoint | What it does |
 |---|---|---|
+| `onboard` | `siwe/nonce → siwe/verify → agent/key` | **Bootstrap (no key needed).** Generate a wallet if you don't have one, SIWE sign-in, mint your `cyb_` key, save both (`0600`). Zero browser. |
 | `list_categories` | — (static) | The seven task categories. No network. |
 | `search_humans` | `POST /api/a2a` `{search_humans}` | Query the capability index by `skills[]`, `min_reputation`, `location`. Ranked by reputation; public columns only. |
 | `get_treasury` | `GET /api/treasury` | The agent's own treasury (null if none yet). |
 | `fund_treasury` | `POST /api/treasury/fund` | **Testnet/demo** top-up (disabled on the live rail). |
 | `get_deposit_address` | `GET /api/treasury/deposit` | Where to send real USDC to fund the treasury (live rail). |
 | `deposit` | `POST /api/treasury/deposit` | Credit the treasury from a real on-chain USDC deposit (tx hash). |
-| `post_task` | `POST /api/tasks` | Open a task. `reward_usd` is the budget; not charged until authorize. Pool/FCFS response also carries `authIntent` + `deployFee`. |
-| `assign_task` | `POST /api/tasks/[id]/assign` | Direct hire: assign to a human; returns `{ task, authIntent }` (authIntent is `null` on the custodial/manual rail). |
-| `authorize_task` | `POST /api/tasks/[id]/authorize` | Open the escrow hold. Custodial/manual: just `task_id`. On-chain direct hire: `auth_intent`/`signed_payment`. Pool/FCFS: also `deploy_fee`/`fee_tx_hash`. |
+| `withdraw_treasury` | `POST /api/treasury/withdraw` | Recover unspent treasury to your wallet — pull USDC back to your own verified deposit wallet on Base (live rail; no destination param, so funds can only go to you). |
+| `post_task` | `POST /api/tasks` | Open an FCFS pool bounty. `reward_usd` is the total budget; `quantity` units; not charged until authorize. Response carries `authIntent` + `deployFee`. |
+| `authorize_task` | `POST /api/tasks/[id]/authorize` | Freeze the whole budget on the audited escrow. With a signing wallet: pass `auth_intent` + `deploy_fee` (the MCP signs + pays the fee); or pre-made `signed_payment` + `fee_tx_hash`. |
 | `get_task` | `GET /api/tasks/[id]` | Task + the submissions/claims the poster may see. Poll for a `pending` submission. |
-| `release_payment` | `POST /api/tasks/[id]/release` | **Direct hire** settle: `approve:true` → capture (pay net of fee); `approve:false` → reject/refund. Auto-resolves the pending `submission_id` if omitted. |
-| `review_submission` | `POST /api/submissions/[id]/review` | **Pool/FCFS** settle: `approve:true` → capture one unit; `approve:false` → reject (slot reopens). |
-| `close_task` | `POST /api/tasks/[id]/close` | Close a (multi-unit) bounty; refund still-held units. |
+| `review_submission` | `POST /api/submissions/[id]/review` | Settle one submission: `approve:true` → capture one unit (full reward in-token); `approve:false` → reject (slot reopens). This is how you pay humans. |
+| `close_task` | `POST /api/tasks/[id]/close` | Close the bounty; the operator voids the unfilled remainder back to you. The deploy fee is non-refundable. |
+| `reclaim` | on-chain `reclaim(paymentInfo)` | **Trustless backstop.** After the authorization deadline, your wallet (the payer) recovers the unfilled budget directly from the audited escrow — no CYBERDYNE operator. Returns `{ ok, tx_hash, reclaimed }`. |
 
-The live rail today is the **custodial USDC escrow** (real deposit → escrow →
-withdraw on Base mainnet): at `authorize_task` the budget is held; on
-`release_payment` it is captured to the human (net of the platform fee) or
-refunded. The **non-custodial pool/FCFS rail** (deploy-fee + `review_submission`)
-is built but gated off on the server until certification. `search_humans` goes
-through the a2a JSON-RPC gateway because the REST `GET /api/humans` is session-only.
+The settlement model is the **non-custodial FCFS pool escrow** (freeze-at-deploy on
+the audited base/commerce-payments `AuthCaptureEscrow`): at `authorize_task` the whole
+budget is frozen; `review_submission` captures one unit to the human (full reward,
+in-token); `close_task` voids the unfilled remainder via the operator, and `reclaim`
+is your own payer-only on-chain recovery if the operator is ever unavailable.
+`search_humans` (discovery only — there is no direct hire) goes through the a2a
+JSON-RPC gateway because the REST `GET /api/humans` is session-only.
 
 ## Run it
 
@@ -116,16 +200,25 @@ CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
 
 ## Install
 
-Published on [npm](https://www.npmjs.com/package/cyberdyne-mcp). Mint your `cyb_…`
-agent key in the app's Agent Console, then:
+Published on [npm](https://www.npmjs.com/package/cyberdyne-mcp).
+
+**Fully autonomous (recommended) — no dashboard:**
+
+```bash
+npx -y cyberdyne-mcp onboard                   # generate a wallet + mint your cyb_ key, save both (0600)
+claude mcp add cyberdyne -- npx -y cyberdyne-mcp
+```
+
+**Already minted a key in the app's Agent Console?** Save it instead:
 
 ```bash
 npx cyberdyne-mcp login cyb_YOURKEY            # save your key once (~/.cyberdyne/config.json, 0600)
 claude mcp add cyberdyne -- npx -y cyberdyne-mcp
 ```
 
-*(Prefer not to save a login? Skip step 1 and pass it inline instead:
-`claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp`.)*
+*(Prefer not to save a login? Pass it inline instead:
+`claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp`.
+Or skip the CLI entirely and call the `onboard` tool from inside the agent.)*
 
 ### …or install the plugin (skill + MCP together)
 
@@ -139,28 +232,24 @@ Bundles the MCP gateway **and** the usage skill. Once connected, run
 
 Then ask the agent, e.g.:
 
-> *Find a Spanish-speaking human who can record audio, post a $3.50 task to read
-> 10 phrases, assign it, authorize the hold, then verify and pay.*
+> *Post a $3.50 FCFS bounty for a human to record 10 phrases, freeze the budget,
+> then verify the first valid submission and pay it.*
 
-The agent chains `search_humans → post_task → assign_task → authorize_task →
-get_task → release_payment` on its own (Flow A, direct hire). For an open
-first-come bounty it instead posts with `quantity > 1` and settles each unit with
-`review_submission` (Flow B, pool/FCFS — active once the pool rail is enabled).
+The agent chains `post_task → authorize_task → get_task → review_submission →
+close_task` on its own. If CYBERDYNE's operator is ever down, it can `reclaim` the
+unfilled budget directly from the escrow after the authorization deadline. There is
+**no direct hire** — every task is an open FCFS pool bounty.
 
 ## Honesty / accuracy
 
 State only what is independently verifiable. This repository, its code, and the
 fact that the tools run and call the documented endpoints are verifiable. The
-backend is **pre-launch**. The live settlement rail today is the **custodial USDC
-rail** (real deposit → escrow → withdraw on Base mainnet). The **non-custodial
-pool/FCFS rail** (deploy-fee + `review_submission`) is built but **gated off** on
-the server pending certification — so real-money non-custodial pool payouts are
-**not live yet**. Do **not** assert funding, valuation, investors, revenue or user
-metrics, any token/airdrop, named individuals, partnerships, or compliance status
-— none are established.
+backend is **pre-launch**. The settlement model is the **non-custodial FCFS pool
+escrow** (freeze-at-deploy on the audited base/commerce-payments `AuthCaptureEscrow`,
+with the agent's own payer-only `reclaim` backstop). Do **not** assert funding,
+valuation, investors, revenue or user metrics, any token/airdrop, named individuals,
+partnerships, or compliance status — none are established.
 
 ## Follow-ups (not in this server)
 
-- The **paid `hire` path** (x402 402→pay→200 over `POST /api/a2a`) is implemented
-  on the platform but not surfaced here — it needs an x402 signing client.
 - A **remote/HTTP MCP** variant (vs. stdio) for hosted agents.

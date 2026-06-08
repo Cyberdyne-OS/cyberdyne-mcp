@@ -1,9 +1,10 @@
 # CYBERDYNE MCP — agent gateway
 
 > The agent-facing side of CYBERDYNE. An open Model Context Protocol (MCP)
-> server that lets an AI agent discover, hire, verify and pay verified humans
+> server that lets an AI agent post FCFS bounties and pay verified humans
 > for real-world tasks an AI can't do alone — voice, on-location observation,
-> physical judgment, data work. Tagline: Get Paid by AI.
+> physical judgment, data work. One non-custodial rail, no direct hire.
+> Tagline: Get Paid by AI.
 
 This file helps AI agents understand and use this repository accurately.
 
@@ -25,43 +26,45 @@ License: MIT
 - CYBERDYNE_API_URL — base URL of the platform API. Default
   https://app.cyberdyne-os.xyz
 
-## Tools → live endpoints (13)
+## Tools → live endpoints (12)
 
 - list_categories — static; the seven task categories (no network)
-- search_humans — POST /api/a2a {search_humans}; query by skills[], min_reputation, location
+- search_humans — POST /api/a2a {search_humans}; discovery only (no direct hire) — query by skills[], min_reputation, location
 - get_treasury — GET /api/treasury; the agent's own treasury
 - fund_treasury — POST /api/treasury/fund; demo/testnet top-up (disabled on the live rail)
 - get_deposit_address — GET /api/treasury/deposit; where to send real USDC (live rail)
 - deposit — POST /api/treasury/deposit; credit the treasury from a real on-chain USDC tx hash
-- post_task — POST /api/tasks; open a task (reward_usd is the budget; not charged until authorize). Pool/FCFS response also returns authIntent + deployFee
-- assign_task — POST /api/tasks/[id]/assign; direct hire: pick a human, returns {task, authIntent}
-- authorize_task — POST /api/tasks/[id]/authorize; open the escrow hold (custodial: just task_id; on-chain: auth_intent/signed_payment; pool: also deploy_fee/fee_tx_hash)
+- withdraw_treasury — POST /api/treasury/withdraw; recover unspent treasury to your verified wallet
+- post_task — POST /api/tasks; open an FCFS pool bounty (reward_usd is the total budget; quantity units; not charged until authorize). Response returns authIntent + deployFee
+- authorize_task — POST /api/tasks/[id]/authorize; freeze the whole budget on the audited escrow (auth_intent + deploy_fee, or pre-made signed_payment + fee_tx_hash)
 - get_task — GET /api/tasks/[id]; task + submissions/claims; poll for a pending submission
-- release_payment — POST /api/tasks/[id]/release; DIRECT HIRE settle: approve→capture(pay), else reject→refund
-- review_submission — POST /api/submissions/[id]/review; POOL/FCFS settle: approve→capture one unit, else reject (slot reopens)
-- close_task — POST /api/tasks/[id]/close; close a multi-unit bounty, refund unfilled units
+- review_submission — POST /api/submissions/[id]/review; settle one submission: approve→capture one unit (full reward in-token), else reject (slot reopens)
+- close_task — POST /api/tasks/[id]/close; operator voids the unfilled remainder back to you (deploy fee non-refundable)
+- reclaim — on-chain reclaim(paymentInfo); TRUSTLESS BACKSTOP: after the authorization deadline, the agent (payer) recovers its unfilled budget directly from the audited escrow with no operator
 
-## Flows
+## Flow
 
-The human submit-proof step is human-only (in the app/UI). Funding both flows:
-get_deposit_address → send real USDC → deposit. There are two settlement flows:
+The human submit-proof step is human-only (in the app/UI). Fund (optional):
+get_deposit_address → send real USDC → deposit. There is ONE settlement model — the
+non-custodial FCFS pool bounty. There is NO direct hire:
 
-- Flow A — DIRECT HIRE (live today, custodial USDC rail): post_task →
-  search_humans → assign_task → authorize_task (open the hold) → poll get_task
-  until a submission is pending → release_payment (approve→capture / reject→refund).
-- Flow B — POOL / FCFS BOUNTY: post_task(quantity>1) → authorize_task
-  (sign the budget + pay the deploy fee, freeze the whole budget) → humans
-  claim+submit FCFS → review_submission per unit → close_task for unfilled units.
-  This non-custodial pool rail is BUILT but GATED OFF on the server until
-  certification — real-money pool payouts are not live yet.
+  post_task({ …, quantity }) → authorize_task (sign the budget + pay the deploy fee,
+  freeze the whole budget on the audited escrow) → humans submit FCFS →
+  review_submission per pending submission (approve captures one unit; reject reopens
+  the slot) → close_task voids the unfilled remainder back to you.
+
+TRUSTLESS BACKSTOP: if CYBERDYNE's operator is ever down, after the authorization
+deadline the agent (the budget's payer) calls reclaim(paymentInfo) directly on the
+audited escrow itself — no platform involvement — to recover the unfilled budget.
 
 ## Settlement model
 
-The live rail today is the CUSTODIAL USDC escrow: real deposit → escrow →
-withdraw on Base mainnet. At authorize_task the budget is held; on release_payment
-it is captured to the human (net of the platform fee) or refunded. The
-non-custodial pool/FCFS rail (deploy-fee + review_submission) is built but gated
-off until certification. search_humans uses the a2a JSON-RPC gateway because the
+The settlement model is the NON-CUSTODIAL FCFS POOL ESCROW (freeze-at-deploy on the
+audited base/commerce-payments AuthCaptureEscrow at 0xBdEA0D1bcC5966192B070Fdf62aB4EF5b4420cff
+on Base). authorize_task freezes the whole budget; review_submission captures one
+unit to the human (full reward, in-token); close_task voids the unfilled remainder
+via the operator; reclaim is the agent's own payer-only on-chain recovery if the
+operator is unavailable. search_humans uses the a2a JSON-RPC gateway because the
 REST GET /api/humans is session-only.
 
 ## For diligence (what is independently verifiable today)

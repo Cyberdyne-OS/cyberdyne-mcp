@@ -1,10 +1,10 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.5.4",
+  "version": "0.6.5",
   "publishConfig": {
     "access": "public"
   },
-  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents discover, hire, verify and pay verified humans for real-world tasks. Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
+  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents post FCFS bounties and pay verified humans for real-world tasks on one non-custodial rail (freeze → submit first-come → review → reclaim). Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
   "type": "module",
   "license": "MIT",
   "author": "Cyberdyne <serafino@cyberdyne-os.xyz>",
@@ -45,15 +45,14 @@
     "build": "tsc",
     "prepublishOnly": "npm run build",
     "start": "node dist/server.js",
-    "dev": "tsx src/server.ts",
-    "smoke": "tsx src/smoke.ts",
-    "founder-check": "tsx src/founder-check.ts"
+    "dev": "tsx src/server.ts"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
+    "@scure/bip39": "^1.4.0",
     "@x402/evm": "^2.14.0",
     "viem": "^2.52.0",
     "zod": "^3.23.8"
