@@ -1,12 +1,11 @@
 /**
- * Bankr-style convenience CLI for CYBERDYNE — `treasury` / `post` / `tasks`.
+ * Bankr-style convenience CLI for CYBERDYNE — `post` / `tasks`.
  *
  * These are ADDITIONAL command-line entry points (not MCP tools). They run, print
  * a human-readable summary to stderr, and exit — exactly like `onboard`/`login`.
  * They mirror the Bankr CLI UX (`bankr fees`, `bankr launch`): a single command
  * that does the full thing autonomously using the saved `cyb_` key + wallet.
  *
- *   treasury (alias balance, fees) — your balance + where to send USDC (bankr fees)
  *   post                           — open a task; on the pool rail, sign + pay +
  *                                    authorize in one shot (bankr launch)
  *   tasks                          — list your own posted tasks with status
@@ -63,49 +62,6 @@ function describe(e) {
     if (e instanceof ApiError)
         return e.message;
     return e instanceof Error ? e.message : String(e);
-}
-// ── treasury (alias: balance, fees) ─────────────────────────────────────────
-// `bankr fees` equivalent: your balance + the deposit address to fund it.
-export async function runTreasury() {
-    if (!hasKey())
-        fail(NO_KEY);
-    const c = client();
-    try {
-        const { treasury } = await c.rest("GET", "/api/treasury");
-        // The deposit address only resolves on the live rail; treat a 403/503 as
-        // "not available yet" rather than failing the whole command.
-        let deposit = null;
-        try {
-            deposit = await c.rest("GET", "/api/treasury/deposit");
-        }
-        catch {
-            deposit = null;
-        }
-        const lines = ["CYBERDYNE treasury"];
-        if (!treasury) {
-            lines.push("  balance        : — (no treasury yet — fund it to create one)");
-        }
-        else {
-            lines.push(`  balance        : ${usd(treasury.balance_usd)}`);
-            lines.push(`  total funded   : ${usd(treasury.total_funded ?? treasury.total_funded_usd)}`);
-            lines.push(`  total spent    : ${usd(treasury.total_spent ?? treasury.total_spent_usd)}`);
-        }
-        if (deposit?.deposit_address) {
-            lines.push("");
-            lines.push(`  deposit USDC to: ${deposit.deposit_address}`);
-            lines.push(`  chain          : Base (chain id ${deposit.chain_id ?? 8453})`);
-            lines.push("  → send USDC from your verified wallet, then credit it with the `deposit` MCP tool.");
-        }
-        else {
-            lines.push("");
-            lines.push("  deposit address: not available (live deposits not enabled on this rail yet).");
-        }
-        console.error(lines.join("\n"));
-        process.exit(0);
-    }
-    catch (e) {
-        fail(describe(e));
-    }
 }
 // ── post (bankr launch) ──────────────────────────────────────────────────────
 // Open a task. Per-unit `--reward` × `--quantity` = the budget. On the pool rail

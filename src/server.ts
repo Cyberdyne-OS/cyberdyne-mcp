@@ -8,10 +8,6 @@
  *
  *   list_categories  — the static task taxonomy (no network)
  *   search_humans    — POST /api/a2a {search_humans}      → capability index
- *   get_treasury     — GET  /api/treasury                 → the agent's balance
- *   get_deposit_address — GET  /api/treasury/deposit      → where to send real USDC (live)
- *   deposit          — POST /api/treasury/deposit         → credit treasury from a real USDC tx
- *   withdraw_treasury — POST /api/treasury/withdraw        → pull unspent treasury back to your wallet (live)
  *   post_task        — POST /api/tasks                    → open an FCFS pool bounty
  *   authorize_task   — POST /api/tasks/[id]/authorize     → sign budget + pay fee + freeze
  *   get_task         — GET  /api/tasks/[id]               → status + submissions/claims
@@ -31,9 +27,9 @@
  *   agent-picks-human. EVERY task is an open bounty: the agent freezes a budget once,
  *   ANY eligible human submits first-come-first-served, and the agent approves/rejects
  *   each submission — approved pays one unit in-token, rejected reopens the slot, and
- *   any unfilled budget is refunded on close.
- *     get_deposit_address → send USDC → deposit            (optional, fund treasury)
- *       → post_task({ ..., quantity }) → returns { task, authIntent, deployFee }
+ *   any unfilled budget is refunded on close. The agent funds the budget directly
+ *   from its OWN wallet at deploy (non-custodial) — there is no platform treasury.
+ *       post_task({ ..., quantity }) → returns { task, authIntent, deployFee }
  *       → authorize_task({ task_id, auth_intent, deploy_fee })  (sign budget + pay fee + freeze)
  *       → humans submit FCFS → poll get_task
  *       → review_submission per pending submission (approve → pay one unit;
@@ -127,13 +123,8 @@ if (process.argv[2] === "login") {
 
 // Bankr-style convenience CLI subcommands (additional entry points, not MCP tools).
 // Each runs autonomously with the saved key/wallet, prints a summary, and exits.
-//   treasury (alias balance, fees) — balance + deposit address  (like `bankr fees`)
 //   post                           — open a task; pool rail auto sign+pay+authorize (like `bankr launch`)
 //   tasks                          — list your own posted tasks with status
-if (["treasury", "balance", "fees"].includes(process.argv[2] ?? "")) {
-  const { runTreasury } = await import("./cli.js");
-  await runTreasury();
-}
 if (process.argv[2] === "post") {
   const { runPost } = await import("./cli.js");
   await runPost(process.argv.slice(3));
@@ -169,7 +160,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.6.5" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.6" });
 
 server.tool(
   "list_categories",
@@ -180,7 +171,7 @@ server.tool(
 
 server.tool(
   "onboard",
-  "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund via get_deposit_address+deposit → post_task → authorize_task → review_submission → close_task). The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.",
+  "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund your WALLET with USDC + a little ETH for gas on Base → post_task → authorize_task → review_submission → close_task). The non-custodial pool freezes the budget directly from your wallet at deploy — there is no platform treasury to deposit into. The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.",
   {},
   async () =>
     guard(async () => {
@@ -215,41 +206,6 @@ server.tool(
         ...(location ? { location } : {}),
       }),
     ),
-);
-
-server.tool(
-  "get_treasury",
-  "Get the agent's own treasury — residual on-chain balance available to cover deploy fees and to withdraw. Fund it with REAL USDC via get_deposit_address + deposit. Returns null if the agent has no treasury yet.",
-  {},
-  async () => guard(() => client.rest("GET", "/api/treasury")),
-);
-
-server.tool(
-  "get_deposit_address",
-  "Get the on-chain address to fund your treasury with REAL USDC (live rail). Returns { deposit_address, chain_id, usdc_address, decimals }. Send USDC from your VERIFIED wallet to deposit_address on Base, then call `deposit` with the tx hash to credit your treasury.",
-  {},
-  async () => guard(() => client.rest("GET", "/api/treasury/deposit")),
-);
-
-server.tool(
-  "deposit",
-  "Credit your treasury from a REAL on-chain USDC deposit. First send USDC to the address from get_deposit_address (from your verified wallet), then call this with the transaction hash. The transfer is verified on-chain (to = platform wallet, from = your wallet) and credited exactly once — resubmitting the same tx never double-credits.",
-  {
-    tx_hash: z
-      .string()
-      .regex(/^0x[0-9a-fA-F]{64}$/)
-      .describe("The Base tx hash of your USDC transfer to the deposit address."),
-  },
-  async ({ tx_hash }) =>
-    guard(() => client.rest("POST", "/api/treasury/deposit", { body: { tx_hash } })),
-);
-
-server.tool(
-  "withdraw_treasury",
-  "Recover UNSPENT treasury to your wallet (live rail): pull USDC out of your treasury back to your own VERIFIED deposit wallet on Base — no browser. Available balance is your treasury balance net of any open escrow holds. Funds can ONLY go to your verified wallet (no destination param), so a leaked key can't redirect them. Returns { ok, tx_hash, amount_usd, to }. 400 insufficient_treasury if the balance can't cover it; 403 withdraws_disabled on the demo rail.",
-  { amount_usd: z.number().positive().describe("USD to withdraw from your treasury to your verified wallet.") },
-  async ({ amount_usd }) =>
-    guard(() => client.rest("POST", "/api/treasury/withdraw", { body: { amount_usd } })),
 );
 
 server.tool(
@@ -394,12 +350,10 @@ server.registerPrompt(
           text: [
             "You are connected to CYBERDYNE — pay verified humans for tasks AI can't do alone. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
             "",
-            "FUND (optional — the pool freezes from your wallet at deploy, but a treasury can cover fees):",
-            "1. get_deposit_address -> the platform deposit address on Base.",
-            "2. Send USDC to it FROM your own verified wallet, then deposit({ tx_hash }) -> credits your treasury (idempotent). Check get_treasury anytime.",
+            "FUND: hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial).",
             "",
             "POST + PAY (the single FCFS flow):",
-            "3. post_task({ title, category, reward_usd, quantity, duration_min, difficulty }) -> returns { task, authIntent, deployFee }. reward_usd is the TOTAL budget; quantity is how many humans it pays (each unit must be >= $0.01). authIntent is the whole-budget authorization; deployFee is a SEPARATE non-refundable fee tx (2.5% USDC / 5% other token).",
+            "3. post_task({ title, category, reward_usd, quantity }) -> returns { task, authIntent, deployFee }. reward_usd is the TOTAL budget; quantity is how many humans it pays (each unit must be >= $0.01). authIntent is the whole-budget authorization; deployFee is a SEPARATE non-refundable fee tx (2.5% USDC / 5% other token).",
             "4. authorize_task({ task_id, auth_intent, deploy_fee }) -> with CYBERDYNE_EVM_PRIVATE_KEY set, the MCP signs the budget AND pays the deploy fee, then FREEZES the whole budget on the audited escrow (or pass pre-made signed_payment + fee_tx_hash).",
             "5. Any eligible human submits FCFS. Poll get_task; for EACH pending submission call review_submission({ submission_id, approve, score }) -> approve captures one unit (full reward to the human, in-token); reject reopens the slot for the next submitter.",
             "6. close_task({ task_id }) -> refunds the unfilled budget back to your wallet (the deploy fee is non-refundable).",
@@ -421,6 +375,6 @@ await server.connect(transport);
 console.error(
   `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no key — run `npx cyberdyne-mcp onboard` to self-generate a wallet + key, or `login cyb_…`, or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
-    ". Tools (13): onboard, list_categories, search_humans, get_treasury, get_deposit_address, deposit, withdraw_treasury, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
-    " CLI: onboard, login, treasury (alias balance/fees), post, tasks.",
+    ". Tools (9): onboard, list_categories, search_humans, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
+    " CLI: onboard, login, post, tasks.",
 );
