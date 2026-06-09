@@ -137,6 +137,8 @@ export interface OnboardResult {
   generated: boolean;
   imported: boolean;
   configPath: string;
+  /** Bankr auto-link outcome, when a bk_ key was supplied. Absent if none. */
+  bankr?: { connected: boolean; project?: string | null; hint?: string };
 }
 
 export interface OnboardOptions {
@@ -144,6 +146,10 @@ export interface OnboardOptions {
   importSecret?: string;
   /** Force a brand-new wallet even if env/config already has one (`onboard --create`). */
   forceCreate?: boolean;
+  /** Optional Bankr `bk_` key: auto-link the agent's Bankr project at onboard, zero
+   *  human interaction. Used ONCE to call POST /api/bankr/connect with the fresh cyb_
+   *  key; never stored. Falls back to env CYBERDYNE_BANKR_KEY. */
+  bankrKey?: string;
 }
 
 /**
@@ -223,18 +229,40 @@ export async function onboard(
   // 5. persist BOTH the token and the wallet key atomically (0600)
   const configPath = saveTokenAndWallet(apiKey, privateKey);
 
-  return { address, apiKey, generated, imported, configPath };
+  // 6. (optional) auto-link Bankr — zero human interaction. If a bk_ key is supplied
+  //    (opts or CYBERDYNE_BANKR_KEY), use it ONCE to connect the agent's Bankr project
+  //    via the fresh cyb_ key. Best-effort: a failure never blocks onboarding, and the
+  //    bk_ key is never stored (the backend uses it once and discards it).
+  let bankr: OnboardResult["bankr"];
+  const bankrKey = (opts.bankrKey ?? env.CYBERDYNE_BANKR_KEY ?? "").trim();
+  if (bankrKey.startsWith("bk_")) {
+    try {
+      const res = await fetch(`${apiUrl}/api/bankr/connect`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ bk_key: bankrKey }),
+      });
+      const j = (await res.json().catch(() => null)) as { ok?: boolean; project?: { projectName?: string } | null; hint?: string } | null;
+      bankr = res.ok && j?.ok
+        ? { connected: true, project: j.project?.projectName ?? null, hint: j.hint }
+        : { connected: false, hint: j?.hint ?? `connect failed (${res.status})` };
+    } catch (e) {
+      bankr = { connected: false, hint: e instanceof Error ? e.message : "bankr connect error" };
+    }
+  }
+
+  return { address, apiKey, generated, imported, configPath, bankr };
 }
 
 /** The multi-line "next steps" block shared by the CLI + the MCP tool. */
 export function nextStepsText(): string {
   return [
     "Next steps (no dashboard needed):",
-    "  1. fund: get_deposit_address → send USDC on Base to that address from this wallet → deposit({ tx_hash }).",
-    "  2. post_task({ title, category, reward_usd, quantity, duration_min, difficulty }).",
+    "  1. Fund THIS wallet with USDC (or BNKR/GITLAWB) + a little ETH for gas on Base — the non-custodial pool freezes the budget directly from your wallet (there is no platform treasury).",
+    "  2. post_task({ title, category, reward_usd, quantity }) → returns the budget authorization + the deploy fee.",
     "  3. authorize_task (sign budget + pay deploy fee + freeze) → humans submit FCFS → poll get_task.",
     "  4. review_submission per pending submission (approve pays a unit; reject reopens it) → close_task refunds the rest.",
-    "The same wallet auto-signs pool budgets (no env vars needed). Trustless backstop: `reclaim` recovers an unfilled budget yourself after the deadline.",
+    "The same wallet auto-signs pool budgets. Trustless backstop: `reclaim` recovers an unfilled budget yourself after the deadline.",
   ].join("\n");
 }
 
@@ -247,11 +275,12 @@ export function nextStepsText(): string {
 //   --create                   force a fresh wallet
 //   (none, interactive TTY)    prompt: paste a key/mnemonic, or press enter to create
 
-/** Tiny flag reader for the onboard args (supports `--import`, `--import=x`, `--create`). */
-function parseOnboardFlags(argv: string[]): { importFlag: boolean; importValue?: string; create: boolean } {
+/** Tiny flag reader for the onboard args (`--import`, `--import=x`, `--create`, `--bankr`). */
+function parseOnboardFlags(argv: string[]): { importFlag: boolean; importValue?: string; create: boolean; bankrValue?: string } {
   let importFlag = false;
   let importValue: string | undefined;
   let create = false;
+  let bankrValue: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
     if (tok === "--create") create = true;
@@ -265,9 +294,17 @@ function parseOnboardFlags(argv: string[]): { importFlag: boolean; importValue?:
     } else if (tok.startsWith("--import=")) {
       importFlag = true;
       importValue = tok.slice("--import=".length);
+    } else if (tok === "--bankr") {
+      const next = argv[i + 1];
+      if (next !== undefined && !next.startsWith("--")) {
+        bankrValue = next;
+        i++;
+      }
+    } else if (tok.startsWith("--bankr=")) {
+      bankrValue = tok.slice("--bankr=".length);
     }
   }
-  return { importFlag, importValue, create };
+  return { importFlag, importValue, create, bankrValue };
 }
 
 /** Read a single line from stdin (used for the interactive import/create prompt). */
@@ -290,6 +327,8 @@ export const ONBOARD_USAGE = [
   "                        CYBERDYNE_IMPORT_KEY=0x<key> npx cyberdyne-mcp onboard --import",
   "                      (passing it as an argument leaves the secret in your shell history.)",
   "  --create            generate a fresh wallet (default in a non-interactive / CI shell).",
+  "  --bankr <bk_key>    auto-link your Bankr project at onboard (or set CYBERDYNE_BANKR_KEY).",
+  "                      The bk_ key is used ONCE server-side and never stored.",
   "  (no flag, in a terminal)  you'll be prompted: paste a key/mnemonic, or press enter to create.",
   "",
   "Either way: SIWE sign-in → mint your cyb_ key → save wallet + key to ~/.cyberdyne/config.json (0600).",
@@ -301,9 +340,11 @@ export const ONBOARD_USAGE = [
  *   piped stdin (with --import) → CYBERDYNE_IMPORT_KEY → --import <value> argv → TTY prompt.
  */
 export async function onboardCli(argv: string[], env: NodeJS.ProcessEnv = process.env): Promise<OnboardResult> {
-  const { importFlag, importValue, create } = parseOnboardFlags(argv);
+  const { importFlag, importValue, create, bankrValue } = parseOnboardFlags(argv);
+  // Bankr auto-link key: --bankr <bk_…> (or env CYBERDYNE_BANKR_KEY, read inside onboard()).
+  const bankrKey = bankrValue?.trim() || undefined;
 
-  if (create) return onboard(env, { forceCreate: true });
+  if (create) return onboard(env, { forceCreate: true, bankrKey });
 
   // Determine the import secret, if the user asked to import.
   let secret: string | undefined;
@@ -351,7 +392,7 @@ export async function onboardCli(argv: string[], env: NodeJS.ProcessEnv = proces
   if (secret) {
     // Validate early with a clear error before any network call.
     privateKeyFromSecret(secret);
-    return onboard(env, { importSecret: secret });
+    return onboard(env, { importSecret: secret, bankrKey });
   }
-  return onboard(env); // create / reuse-saved, as before
+  return onboard(env, { bankrKey }); // create / reuse-saved, as before
 }

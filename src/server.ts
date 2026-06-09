@@ -72,6 +72,9 @@ if (process.argv[2] === "onboard") {
           : r.imported
             ? `\n  (your imported wallet private key was saved to ${r.configPath}; keep that file safe)`
             : "") +
+        (r.bankr
+          ? `\n  Bankr          : ${r.bankr.connected ? `connected${r.bankr.project ? ` · ${r.bankr.project}` : ""}` : "not connected"}${r.bankr.hint ? ` (${r.bankr.hint})` : ""}`
+          : "") +
         `\n\n${nextStepsText()}` +
         `\n\nThis MCP is already configured for this agent — networked tools will use the saved key.`,
     );
@@ -160,7 +163,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.6.6" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.7" });
 
 server.tool(
   "list_categories",
