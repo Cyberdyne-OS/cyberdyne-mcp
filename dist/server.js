@@ -151,7 +151,7 @@ async function guard(fn) {
     }
 }
 // ---- Server ---------------------------------------------------------------
-const server = new McpServer({ name: "cyberdyne", version: "0.6.7" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.8" });
 server.tool("list_categories", "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
 server.tool("onboard", "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund your WALLET with USDC + a little ETH for gas on Base → post_task → authorize_task → review_submission → close_task). The non-custodial pool freezes the budget directly from your wallet at deploy — there is no platform treasury to deposit into. The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.", {}, async () => guard(async () => {
     const r = await onboard();

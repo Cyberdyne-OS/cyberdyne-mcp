@@ -17,6 +17,8 @@
  * a DB row. The wallet private key is persisted but NEVER logged to stdout.
  */
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { generatePrivateKey, privateKeyToAccount, mnemonicToAccount } from "viem/accounts";
 import { bytesToHex } from "viem";
@@ -131,6 +133,27 @@ function cookieHeader(jar: Map<string, string>): string {
   return [...jar.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
+/**
+ * Auto-discover the agent's Bankr `bk_` key WITHOUT requiring a flag — so a plain
+ * `npx cyberdyne-mcp onboard` links Bankr whenever the agent already has Bankr set up.
+ * Order: CYBERDYNE_BANKR_KEY → BANKR_API_KEY (Bankr's own standard env var) →
+ * ~/.bankr/config.json (any `bk_`-prefixed value — the same config file Bankr's CLI/SDK use).
+ * Returns undefined if nothing is configured (then onboard just skips Bankr linking).
+ */
+function discoverBankrKey(env: NodeJS.ProcessEnv): string | undefined {
+  const fromEnv = env.CYBERDYNE_BANKR_KEY?.trim() || env.BANKR_API_KEY?.trim();
+  if (fromEnv?.startsWith("bk_")) return fromEnv;
+  try {
+    const cfg = JSON.parse(readFileSync(join(homedir(), ".bankr", "config.json"), "utf8")) as Record<string, unknown>;
+    for (const v of Object.values(cfg)) {
+      if (typeof v === "string" && v.startsWith("bk_")) return v.trim();
+    }
+  } catch {
+    /* no ~/.bankr/config.json — fine, Bankr just isn't configured */
+  }
+  return undefined;
+}
+
 export interface OnboardResult {
   address: string;
   apiKey: string;
@@ -234,7 +257,7 @@ export async function onboard(
   //    via the fresh cyb_ key. Best-effort: a failure never blocks onboarding, and the
   //    bk_ key is never stored (the backend uses it once and discards it).
   let bankr: OnboardResult["bankr"];
-  const bankrKey = (opts.bankrKey ?? env.CYBERDYNE_BANKR_KEY ?? "").trim();
+  const bankrKey = (opts.bankrKey?.trim() || discoverBankrKey(env) || "");
   if (bankrKey.startsWith("bk_")) {
     try {
       const res = await fetch(`${apiUrl}/api/bankr/connect`, {
@@ -327,8 +350,10 @@ export const ONBOARD_USAGE = [
   "                        CYBERDYNE_IMPORT_KEY=0x<key> npx cyberdyne-mcp onboard --import",
   "                      (passing it as an argument leaves the secret in your shell history.)",
   "  --create            generate a fresh wallet (default in a non-interactive / CI shell).",
-  "  --bankr <bk_key>    auto-link your Bankr project at onboard (or set CYBERDYNE_BANKR_KEY).",
-  "                      The bk_ key is used ONCE server-side and never stored.",
+  "  --bankr <bk_key>    link your Bankr project at onboard. USUALLY UNNEEDED: onboard",
+  "                      auto-discovers your key from BANKR_API_KEY / ~/.bankr/config.json,",
+  "                      so a plain `onboard` links Bankr if you already use it. Used once,",
+  "                      server-side, and never stored.",
   "  (no flag, in a terminal)  you'll be prompted: paste a key/mnemonic, or press enter to create.",
   "",
   "Either way: SIWE sign-in → mint your cyb_ key → save wallet + key to ~/.cyberdyne/config.json (0600).",
