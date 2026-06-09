@@ -125,7 +125,7 @@ export async function runPost(argv: string[]): Promise<void> {
     const res = await c.rest<{
       task: { id: string; escrow_status?: string };
       authIntent?: { requirements?: unknown };
-      deployFee?: { usd: number; recipient: string; token: string };
+      deployFee?: { amount: number; decimals: number; usd: number; recipient: string; token: string };
     }>("POST", "/api/tasks", { body });
     const taskId = res.task?.id;
     console.error(`  ✓ posted — task ${taskId}`);
@@ -155,8 +155,8 @@ export async function runPost(argv: string[]): Promise<void> {
     const signedPayment = await signAuthCapture(requirements);
 
     const fee = res.deployFee;
-    console.error(`→ paying the deploy fee (${usd(fee.usd)} in ${fee.token}) from your wallet…`);
-    const feeTx = await payDeployFee({ amountUsd: fee.usd, recipient: fee.recipient, token: fee.token });
+    console.error(`→ paying the deploy fee (${fee.amount} ${fee.token} ≈ ${usd(fee.usd)}) from your wallet…`);
+    const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
     console.error(`  ✓ fee paid — ${feeTx}`);
 
     console.error("→ freezing the budget (authorize)…");

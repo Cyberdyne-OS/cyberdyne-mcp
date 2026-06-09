@@ -55,11 +55,14 @@ const ERC20_TRANSFER_ABI = [
  */
 export async function payDeployFee(params) {
     const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    // Scale by the TOKEN's decimals, not a hardcoded 6. Using 6 for an 18-decimal
+    // token (BNKR/GITLAWB) underpaid the fee 10^12× → permanent fee_unverified.
+    const value = parseUnits(params.amount.toFixed(params.decimals), params.decimals);
     const hash = await wallet.writeContract({
         address: params.token,
         abi: ERC20_TRANSFER_ABI,
         functionName: "transfer",
-        args: [params.recipient, parseUnits(params.amountUsd.toFixed(6), 6)],
+        args: [params.recipient, value],
         chain: chain(),
     });
     // Wait until the fee tx is ≥1 block deep BEFORE returning, so the platform's

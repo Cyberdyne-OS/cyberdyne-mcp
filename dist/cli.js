@@ -133,8 +133,8 @@ export async function runPost(argv) {
         console.error("→ signing the budget authorization…");
         const signedPayment = await signAuthCapture(requirements);
         const fee = res.deployFee;
-        console.error(`→ paying the deploy fee (${usd(fee.usd)} in ${fee.token}) from your wallet…`);
-        const feeTx = await payDeployFee({ amountUsd: fee.usd, recipient: fee.recipient, token: fee.token });
+        console.error(`→ paying the deploy fee (${fee.amount} ${fee.token} ≈ ${usd(fee.usd)}) from your wallet…`);
+        const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
         console.error(`  ✓ fee paid — ${feeTx}`);
         console.error("→ freezing the budget (authorize)…");
         const authed = await c.rest("POST", `/api/tasks/${taskId}/authorize`, { body: { signedPayment, fee_tx_hash: feeTx } });

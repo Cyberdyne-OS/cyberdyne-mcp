@@ -163,7 +163,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.6.8" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.9" });
 
 server.tool(
   "list_categories",
@@ -254,8 +254,8 @@ server.tool(
             payload = await signAuthCapture(requirements);
           }
           if (!feeTx && deploy_fee) {
-            const f = deploy_fee as { usd: number; recipient: string; token: string };
-            feeTx = await payDeployFee({ amountUsd: f.usd, recipient: f.recipient, token: f.token });
+            const f = deploy_fee as { amount: number; decimals: number; usd: number; recipient: string; token: string };
+            feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
           }
         }
       }

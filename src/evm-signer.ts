@@ -57,16 +57,22 @@ const ERC20_TRANSFER_ABI = [
  * this gas (CYBERDYNE absorbs none). USDC is 6-dp (v1 pool settles in USDC).
  */
 export async function payDeployFee(params: {
-  amountUsd: number;
+  /** Fee in the FEE TOKEN's own units (NOT USD). The platform pins this at post. */
+  amount: number;
+  /** The fee token's ERC-20 decimals (USDC=6, BNKR/GITLAWB=18, dynamic varies). */
+  decimals: number;
   recipient: string;
   token: string;
 }): Promise<string> {
   const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+  // Scale by the TOKEN's decimals, not a hardcoded 6. Using 6 for an 18-decimal
+  // token (BNKR/GITLAWB) underpaid the fee 10^12× → permanent fee_unverified.
+  const value = parseUnits(params.amount.toFixed(params.decimals), params.decimals);
   const hash = await wallet.writeContract({
     address: params.token as `0x${string}`,
     abi: ERC20_TRANSFER_ABI,
     functionName: "transfer",
-    args: [params.recipient as `0x${string}`, parseUnits(params.amountUsd.toFixed(6), 6)],
+    args: [params.recipient as `0x${string}`, value],
     chain: chain(),
   });
   // Wait until the fee tx is ≥1 block deep BEFORE returning, so the platform's
