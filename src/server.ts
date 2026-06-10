@@ -163,7 +163,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.6.10" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.11" });
 
 server.tool(
   "list_categories",
@@ -244,17 +244,27 @@ server.tool(
   },
   async ({ task_id, signed_payment, auth_intent, deploy_fee, fee_tx_hash }) =>
     guard(async () => {
+      // The MCP stdio bridge delivers complex object args as JSON STRINGS (the schema is
+      // z.unknown(), which performs no coercion). Parse them back to objects BEFORE use —
+      // otherwise `auth_intent.requirements` is undefined, the raw string flows into
+      // signAuthCapture, and x402 createPaymentPayload crashes on `requirements.extra.name`.
+      const parseArg = (v: unknown): unknown => {
+        if (typeof v !== "string") return v;
+        try { return JSON.parse(v); } catch { return v; }
+      };
+      const ai = parseArg(auth_intent);
+      const df = parseArg(deploy_fee);
       let payload = signed_payment;
       let feeTx = fee_tx_hash;
-      if ((!payload && auth_intent) || (!feeTx && deploy_fee)) {
+      if ((!payload && ai) || (!feeTx && df)) {
         const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
         if (hasEvmKey()) {
-          if (!payload && auth_intent) {
-            const requirements = (auth_intent as { requirements?: unknown }).requirements ?? auth_intent;
+          if (!payload && ai) {
+            const requirements = (ai as { requirements?: unknown }).requirements ?? ai;
             payload = await signAuthCapture(requirements);
           }
-          if (!feeTx && deploy_fee) {
-            const f = deploy_fee as { amount: number; decimals: number; usd: number; recipient: string; token: string };
+          if (!feeTx && df) {
+            const f = df as { amount: number; decimals: number; usd: number; recipient: string; token: string };
             feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
           }
         }

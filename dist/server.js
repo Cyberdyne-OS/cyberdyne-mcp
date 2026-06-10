@@ -151,7 +151,7 @@ async function guard(fn) {
     }
 }
 // ---- Server ---------------------------------------------------------------
-const server = new McpServer({ name: "cyberdyne", version: "0.6.10" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.11" });
 server.tool("list_categories", "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
 server.tool("onboard", "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund your WALLET with USDC + a little ETH for gas on Base → post_task → authorize_task → review_submission → close_task). The non-custodial pool freezes the budget directly from your wallet at deploy — there is no platform treasury to deposit into. The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.", {}, async () => guard(async () => {
     const r = await onboard();
@@ -198,17 +198,33 @@ server.tool("authorize_task", "Freeze the bounty budget on-chain (the second ste
         .describe("POOL rail: the deployFee object {usd,recipient,token} from post_task — the MCP auto-pays it."),
     fee_tx_hash: z.string().optional().describe("POOL rail: hash of an already-paid deploy-fee tx (skips auto-pay)."),
 }, async ({ task_id, signed_payment, auth_intent, deploy_fee, fee_tx_hash }) => guard(async () => {
+    // The MCP stdio bridge delivers complex object args as JSON STRINGS (the schema is
+    // z.unknown(), which performs no coercion). Parse them back to objects BEFORE use —
+    // otherwise `auth_intent.requirements` is undefined, the raw string flows into
+    // signAuthCapture, and x402 createPaymentPayload crashes on `requirements.extra.name`.
+    const parseArg = (v) => {
+        if (typeof v !== "string")
+            return v;
+        try {
+            return JSON.parse(v);
+        }
+        catch {
+            return v;
+        }
+    };
+    const ai = parseArg(auth_intent);
+    const df = parseArg(deploy_fee);
     let payload = signed_payment;
     let feeTx = fee_tx_hash;
-    if ((!payload && auth_intent) || (!feeTx && deploy_fee)) {
+    if ((!payload && ai) || (!feeTx && df)) {
         const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
         if (hasEvmKey()) {
-            if (!payload && auth_intent) {
-                const requirements = auth_intent.requirements ?? auth_intent;
+            if (!payload && ai) {
+                const requirements = ai.requirements ?? ai;
                 payload = await signAuthCapture(requirements);
             }
-            if (!feeTx && deploy_fee) {
-                const f = deploy_fee;
+            if (!feeTx && df) {
+                const f = df;
                 feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
             }
         }
