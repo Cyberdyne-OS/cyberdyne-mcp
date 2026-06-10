@@ -65,9 +65,8 @@ function describe(e) {
 }
 // ── post (bankr launch) ──────────────────────────────────────────────────────
 // Open a task. Per-unit `--reward` × `--quantity` = the budget. On the pool rail
-// (BNKR/GITLAWB or quantity>1) the response carries authIntent + deployFee: sign
-// the budget + pay the fee + authorize, all from the saved wallet, autonomously.
-const PAY_TOKENS = new Set(["USDC", "BNKR", "GITLAWB"]);
+// (BNKR/GITLAWB/any dynamic token or quantity>1) the response carries authIntent +
+// deployFee: sign the budget + pay the fee + authorize, all from the saved wallet.
 export async function runPost(argv) {
     if (!hasKey())
         fail(NO_KEY);
@@ -78,9 +77,13 @@ export async function runPost(argv) {
     const rewardPerUnit = Number(f.reward);
     if (!Number.isFinite(rewardPerUnit) || rewardPerUnit <= 0)
         fail("--reward <n> is required (per-unit, in the pay token)");
-    const token = (f.token ?? "USDC").toUpperCase();
-    if (!PAY_TOKENS.has(token))
-        fail(`--token must be one of USDC, BNKR, GITLAWB (got ${token})`);
+    // Pay token: a curated symbol (USDC / BNKR / GITLAWB) OR a 0x… address for a
+    // DYNAMIC registry token — i.e. ANY Bankr-launched token that's been added to the
+    // platform's token registry. The backend resolves + validates it (rejects unknown
+    // symbols / unregistered or disabled addresses), so we pass it through verbatim.
+    const rawTok = (f.token ?? "USDC").trim();
+    const isAddr = /^0x[0-9a-fA-F]{40}$/.test(rawTok);
+    const token = isAddr ? rawTok.toLowerCase() : rawTok.toUpperCase();
     const quantity = f.quantity != null ? Math.trunc(Number(f.quantity)) : 1;
     if (!Number.isFinite(quantity) || quantity < 1)
         fail("--quantity must be a positive integer");
@@ -92,7 +95,7 @@ export async function runPost(argv) {
     const railFlag = f.rail?.trim().toLowerCase();
     const rail = railFlag === "pool" || railFlag === "custodial"
         ? railFlag
-        : token === "BNKR" || token === "GITLAWB" || quantity > 1
+        : token === "BNKR" || token === "GITLAWB" || isAddr || quantity > 1
             ? "pool"
             : "custodial";
     // reward_usd is the TOTAL budget (= per-unit × quantity). For non-USDC tokens this
