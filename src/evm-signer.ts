@@ -13,7 +13,7 @@
  * Nothing here moves funds or pays gas; it only produces a signature.
  */
 import { privateKeyToAccount } from "viem/accounts";
-import { createPublicClient, createWalletClient, getAddress, http, parseUnits } from "viem";
+import { createPublicClient, createWalletClient, getAddress, http, isAddress, nonceManager, parseUnits } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { AuthCaptureEvmScheme, toClientEvmSigner } from "@x402/evm";
 import { readSavedWalletKey } from "./client.js";
@@ -31,7 +31,10 @@ function resolvePrivateKey(): string | undefined {
 function account() {
   const pk = resolvePrivateKey();
   if (!pk) throw new Error("no signing key (set CYBERDYNE_EVM_PRIVATE_KEY or run `cyberdyne-mcp onboard`)");
-  return privateKeyToAccount((pk.startsWith("0x") ? pk : `0x${pk}`) as `0x${string}`);
+  // Attach viem's nonceManager so CONCURRENT on-chain sends (e.g. two authorize_task in
+  // flight, each paying a deploy fee) get sequential nonces instead of both reading the
+  // same `pending` nonce and silently dropping/replacing one another.
+  return privateKeyToAccount((pk.startsWith("0x") ? pk : `0x${pk}`) as `0x${string}`, { nonceManager });
 }
 function chain() {
   return Number(process.env.CYBERDYNE_CHAIN_ID ?? 8453) === 8453 ? base : baseSepolia;
@@ -64,23 +67,33 @@ export async function payDeployFee(params: {
   recipient: string;
   token: string;
 }): Promise<string> {
+  // Coerce + validate: over the MCP bridge numeric fields can arrive as STRINGS, and a
+  // missing/undefined decimals would silently scale the fee to 0 (parseUnits(x, undefined))
+  // → underpaid → permanent fee_unverified. A bad address would surface as an opaque viem
+  // InvalidAddressError. Fail loudly with an actionable message instead.
+  const amt = Number(params.amount);
+  const dec = Number(params.decimals);
+  if (!Number.isFinite(amt) || amt <= 0) throw new Error(`deploy_fee.amount invalid (${params.amount}) — pass the full deployFee object from post_task`);
+  if (!Number.isInteger(dec) || dec < 0 || dec > 36) throw new Error(`deploy_fee.decimals invalid (${params.decimals}) — pass the full deployFee object from post_task`);
+  if (!isAddress(params.token) || !isAddress(params.recipient)) throw new Error("deploy_fee.token/recipient is not a valid address — pass the full deployFee object from post_task");
+
   const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
-  // Scale by the TOKEN's decimals, not a hardcoded 6. Using 6 for an 18-decimal
-  // token (BNKR/GITLAWB) underpaid the fee 10^12× → permanent fee_unverified.
-  const value = parseUnits(params.amount.toFixed(params.decimals), params.decimals);
+  // Scale by the TOKEN's own decimals (a hardcoded 6 underpaid 18-decimal tokens 10^12×).
+  const value = parseUnits(amt.toFixed(dec), dec);
   const hash = await wallet.writeContract({
-    address: params.token as `0x${string}`,
+    address: getAddress(params.token),
     abi: ERC20_TRANSFER_ABI,
     functionName: "transfer",
-    args: [params.recipient as `0x${string}`, value],
+    args: [getAddress(params.recipient), value],
     chain: chain(),
   });
-  // Wait until the fee tx is ≥1 block deep BEFORE returning, so the platform's
-  // verifyFeePayment (which requires 1 confirmation, anti-reorg) accepts it on the
-  // authorize call that immediately follows. Without this the agent pays the fee
-  // then gets a 402 fee_unverified because the tx isn't mined/deep enough yet.
+  // Wait ≥2 confirmations so the platform's verifyFeePayment accepts it on the authorize
+  // call that immediately follows — AND verify the tx actually SUCCEEDED. A reverted
+  // transfer (insufficient balance, paused/blocklisted token, hooks) still produces a
+  // receipt; without the status check we'd return it as 'paid' and the budget never freezes.
   const pub = createPublicClient({ chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
-  await pub.waitForTransactionReceipt({ hash, confirmations: 2 });
+  const receipt = await pub.waitForTransactionReceipt({ hash, confirmations: 2 });
+  if (receipt.status !== "success") throw new Error(`deploy fee tx ${hash} reverted on-chain — fee NOT paid (no budget frozen)`);
   return hash;
 }
 
@@ -260,5 +273,22 @@ export async function reclaimBudget(info: StoredPaymentInfo): Promise<{ ok: true
         "or the deadline window is wrong. Nothing was recovered.",
     );
   }
-  return { ok: true, tx_hash: hash, reclaimed: String(paymentInfo.maxAmount) };
+  // reclaim recovers only the UNCAPTURED remainder, NOT the full maxAmount ceiling. Decode
+  // the ACTUAL refund from the receipt — the ERC-20 Transfer(s) whose recipient is the payer
+  // — so we never overstate. Fall back to maxAmount only if no Transfer is decodable.
+  let reclaimed = String(paymentInfo.maxAmount);
+  try {
+    const TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+    const payerLc = payer.toLowerCase();
+    let sum = 0n;
+    for (const l of receipt.logs) {
+      if (l.topics[0] !== TRANSFER || !l.topics[2]) continue;
+      const to = ("0x" + l.topics[2].slice(26)).toLowerCase();
+      if (to === payerLc) sum += BigInt(l.data);
+    }
+    if (sum > 0n) reclaimed = String(sum);
+  } catch {
+    /* keep the maxAmount fallback */
+  }
+  return { ok: true, tx_hash: hash, reclaimed };
 }

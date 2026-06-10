@@ -195,7 +195,20 @@ export async function onboard(
   // `onboard --create` / `--import` (a NEW wallet) or a missing token still mints below.
   const savedToken = readConfig(env).token;
   if (!generated && !imported && savedToken?.startsWith("cyb_")) {
-    return { address, apiKey: savedToken, generated: false, imported: false, configPath: configFilePath(), bankr: undefined };
+    // VALIDATE the saved key is still live before reusing it — a server-side-revoked key
+    // would otherwise wedge every networked tool with no recovery. A cheap authed GET
+    // confirms it; on 401/revoked we FALL THROUGH to the SIWE→mint chain below.
+    try {
+      const probe = await fetch(`${apiUrl}/api/tasks?mine=posted&limit=1`, {
+        headers: { authorization: `Bearer ${savedToken}`, accept: "application/json" },
+      });
+      if (probe.ok) {
+        return { address, apiKey: savedToken, generated: false, imported: false, configPath: configFilePath(), bankr: undefined };
+      }
+      // not ok (401/403/…) → the saved key is dead; fall through and mint a fresh one.
+    } catch {
+      // network error → don't trust the saved key blindly; fall through and re-mint.
+    }
   }
 
   const jar = new Map<string, string>();
@@ -258,8 +271,15 @@ export async function onboard(
     throw new Error("POST /api/agent/key → no cyb_ apiKey in response");
   }
 
-  // 5. persist BOTH the token and the wallet key atomically (0600)
-  const configPath = saveTokenAndWallet(apiKey, privateKey);
+  // 5. persist BOTH the token and the wallet key atomically (0600). If the write fails
+  //    the key is ALREADY minted server-side (counts against the active-key cap), so we
+  //    surface it in the error rather than silently losing a live key on every retry.
+  let configPath: string;
+  try {
+    configPath = saveTokenAndWallet(apiKey, privateKey);
+  } catch (e) {
+    throw new Error(`minted agent key ${apiKey} but failed to save ~/.cyberdyne/config.json: ${e instanceof Error ? e.message : String(e)} — run \`npx cyberdyne-mcp login ${apiKey}\` to save it manually.`);
+  }
 
   // 6. (optional) auto-link Bankr — zero human interaction. If a bk_ key is supplied
   //    (opts or CYBERDYNE_BANKR_KEY), use it ONCE to connect the agent's Bankr project

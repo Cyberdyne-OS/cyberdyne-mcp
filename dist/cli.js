@@ -136,7 +136,9 @@ export async function runPost(argv) {
         console.error("→ signing the budget authorization…");
         const signedPayment = await signAuthCapture(requirements);
         const fee = res.deployFee;
-        console.error(`→ paying the deploy fee (${fee.amount} ${fee.token} ≈ ${usd(fee.usd)}) from your wallet…`);
+        // `fee.amount` is in the FEE TOKEN's own units; for non-USDC tokens `fee.usd` is the
+        // token amount (no oracle), so DON'T render it as a "$" — just show the token amount.
+        console.error(`→ paying the deploy fee (${fee.amount} of ${String(fee.token).slice(0, 10)}…) from your wallet…`);
         const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
         console.error(`  ✓ fee paid — ${feeTx}`);
         console.error("→ freezing the budget (authorize)…");
@@ -168,7 +170,9 @@ export async function runTasks() {
         const lines = [`Your posted tasks (${tasks.length}):`];
         for (const t of tasks) {
             const qty = Number(t.quantity ?? 1) || 1;
-            const filled = Number(t.filled_count ?? t.captured_count ?? 0) || 0;
+            // The captured-slots column is `slots_filled` (migration 035) — NOT filled_count/
+            // captured_count (which don't exist, so the old read was always 0 → always "0/qty").
+            const filled = Number(t.slots_filled ?? 0) || 0;
             const remaining = Math.max(qty - filled, 0);
             const token = String(t.pay_token ?? "USDC");
             const status = String(t.escrow_status ? `${t.status}/${t.escrow_status}` : t.status ?? "—");

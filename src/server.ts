@@ -163,7 +163,7 @@ async function guard<T>(fn: () => Promise<T>) {
 
 // ---- Server ---------------------------------------------------------------
 
-const server = new McpServer({ name: "cyberdyne", version: "0.6.12" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.13" });
 
 server.tool(
   "list_categories",
@@ -223,8 +223,13 @@ server.tool(
     quantity: z.number().int().positive().optional().describe("Number of identical units (default 1)."),
     duration_min: z.number().int().positive().describe("Estimated minutes to complete."),
     difficulty: z.enum(["easy", "medium", "hard"]),
-    pay_token: z.enum(["USDC", "BNKR", "CYOS"]).optional().describe("Settlement token (default USDC)."),
+    // Free string, not an enum: the backend accepts USDC / BNKR / GITLAWB (the real pool
+    // tokens) OR a 0x… address for ANY registered Bankr-launched (dynamic) token. The old
+    // enum wrongly omitted GITLAWB (rejected client-side) and offered CYOS (always 422).
+    pay_token: z.string().optional().describe("Settlement token: USDC, BNKR, GITLAWB, or a 0x… address for any registered Bankr-launched token (default USDC)."),
     deadline_hours: z.number().int().positive().optional(),
+    social_action: z.enum(["follow", "retweet", "reply", "quote", "original-post"]).optional().describe("For category 'social': the X action a human must perform."),
+    social_target_url: z.string().url().optional().describe("For category 'social': the x.com post/profile URL the action targets."),
   },
   async (args) => guard(() => client.rest("POST", "/api/tasks", { body: args })),
 );
@@ -258,23 +263,37 @@ server.tool(
       let feeTx = fee_tx_hash;
       if ((!payload && ai) || (!feeTx && df)) {
         const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
-        if (hasEvmKey()) {
-          if (!payload && ai) {
-            const requirements = (ai as { requirements?: unknown }).requirements ?? ai;
-            payload = await signAuthCapture(requirements);
-          }
-          if (!feeTx && df) {
-            const f = df as { amount: number; decimals: number; usd: number; recipient: string; token: string };
-            feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
-          }
+        // FAIL LOUDLY when a wallet is needed but absent — otherwise we'd silently call
+        // authorize with an empty body and the budget would never freeze, with no hint why.
+        if (!hasEvmKey()) {
+          throw new Error("authorize needs a signing wallet to sign the escrow authorization and pay the deploy fee. Run `npx cyberdyne-mcp onboard` (or set CYBERDYNE_EVM_PRIVATE_KEY), or pass a pre-signed `signed_payment` + `fee_tx_hash`.");
+        }
+        if (!payload && ai) {
+          const requirements = (ai as { requirements?: unknown }).requirements ?? ai;
+          payload = await signAuthCapture(requirements);
+        }
+        if (!feeTx && df) {
+          const f = df as { amount: number; decimals: number; usd: number; recipient: string; token: string };
+          feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
         }
       }
-      return client.rest("POST", `/api/tasks/${task_id}/authorize`, {
-        body: {
-          ...(payload ? { signedPayment: payload } : {}),
-          ...(feeTx ? { fee_tx_hash: feeTx } : {}),
-        },
-      });
+      try {
+        return await client.rest("POST", `/api/tasks/${task_id}/authorize`, {
+          body: {
+            ...(payload ? { signedPayment: payload } : {}),
+            ...(feeTx ? { fee_tx_hash: feeTx } : {}),
+          },
+        });
+      } catch (e) {
+        // The deploy fee may ALREADY be paid on-chain. Surface fee_tx_hash + the signed
+        // payload so the caller can RETRY authorize_task with them instead of re-paying
+        // (the fee is per-task; paying twice loses money).
+        const msg = e instanceof Error ? e.message : String(e);
+        if (feeTx) {
+          throw new Error(`${msg} — deploy fee ALREADY PAID (fee_tx_hash: ${feeTx}). Retry authorize_task with { task_id: "${task_id}", fee_tx_hash: "${feeTx}"${payload ? `, signed_payment: "<the same payload>"` : ""} } — do NOT re-pay.`);
+        }
+        throw e;
+      }
     }),
 );
 

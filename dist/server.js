@@ -151,7 +151,7 @@ async function guard(fn) {
     }
 }
 // ---- Server ---------------------------------------------------------------
-const server = new McpServer({ name: "cyberdyne", version: "0.6.12" });
+const server = new McpServer({ name: "cyberdyne", version: "0.6.13" });
 server.tool("list_categories", "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
 server.tool("onboard", "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund your WALLET with USDC + a little ETH for gas on Base → post_task → authorize_task → review_submission → close_task). The non-custodial pool freezes the budget directly from your wallet at deploy — there is no platform treasury to deposit into. The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.", {}, async () => guard(async () => {
     const r = await onboard();
@@ -185,8 +185,13 @@ server.tool("post_task", "Open an FCFS pool bounty on the marketplace. There is 
     quantity: z.number().int().positive().optional().describe("Number of identical units (default 1)."),
     duration_min: z.number().int().positive().describe("Estimated minutes to complete."),
     difficulty: z.enum(["easy", "medium", "hard"]),
-    pay_token: z.enum(["USDC", "BNKR", "CYOS"]).optional().describe("Settlement token (default USDC)."),
+    // Free string, not an enum: the backend accepts USDC / BNKR / GITLAWB (the real pool
+    // tokens) OR a 0x… address for ANY registered Bankr-launched (dynamic) token. The old
+    // enum wrongly omitted GITLAWB (rejected client-side) and offered CYOS (always 422).
+    pay_token: z.string().optional().describe("Settlement token: USDC, BNKR, GITLAWB, or a 0x… address for any registered Bankr-launched token (default USDC)."),
     deadline_hours: z.number().int().positive().optional(),
+    social_action: z.enum(["follow", "retweet", "reply", "quote", "original-post"]).optional().describe("For category 'social': the X action a human must perform."),
+    social_target_url: z.string().url().optional().describe("For category 'social': the x.com post/profile URL the action targets."),
 }, async (args) => guard(() => client.rest("POST", "/api/tasks", { body: args })));
 server.tool("authorize_task", "Freeze the bounty budget on-chain (the second step of the FCFS flow). REAL-TOKEN POOL rail: pass BOTH `auth_intent` (the authIntent from post_task) AND `deploy_fee` (the deployFee object from post_task) — with CYBERDYNE_EVM_PRIVATE_KEY set, the MCP signs the whole-budget authorization AND pays the separate 2.5% USDC / 5% other-token deploy fee tx from its wallet, then freezes the budget on the audited escrow; or pass a pre-signed `signed_payment` and a pre-paid `fee_tx_hash`. After this, any eligible human submits FCFS and you review_submission each. The non-custodial POOL escrow is the only rail; a non-real token / non-live config returns 409 settlement_unavailable. Idempotent once frozen.", {
     task_id: z.string().uuid(),
@@ -218,23 +223,38 @@ server.tool("authorize_task", "Freeze the bounty budget on-chain (the second ste
     let feeTx = fee_tx_hash;
     if ((!payload && ai) || (!feeTx && df)) {
         const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
-        if (hasEvmKey()) {
-            if (!payload && ai) {
-                const requirements = ai.requirements ?? ai;
-                payload = await signAuthCapture(requirements);
-            }
-            if (!feeTx && df) {
-                const f = df;
-                feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
-            }
+        // FAIL LOUDLY when a wallet is needed but absent — otherwise we'd silently call
+        // authorize with an empty body and the budget would never freeze, with no hint why.
+        if (!hasEvmKey()) {
+            throw new Error("authorize needs a signing wallet to sign the escrow authorization and pay the deploy fee. Run `npx cyberdyne-mcp onboard` (or set CYBERDYNE_EVM_PRIVATE_KEY), or pass a pre-signed `signed_payment` + `fee_tx_hash`.");
+        }
+        if (!payload && ai) {
+            const requirements = ai.requirements ?? ai;
+            payload = await signAuthCapture(requirements);
+        }
+        if (!feeTx && df) {
+            const f = df;
+            feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
         }
     }
-    return client.rest("POST", `/api/tasks/${task_id}/authorize`, {
-        body: {
-            ...(payload ? { signedPayment: payload } : {}),
-            ...(feeTx ? { fee_tx_hash: feeTx } : {}),
-        },
-    });
+    try {
+        return await client.rest("POST", `/api/tasks/${task_id}/authorize`, {
+            body: {
+                ...(payload ? { signedPayment: payload } : {}),
+                ...(feeTx ? { fee_tx_hash: feeTx } : {}),
+            },
+        });
+    }
+    catch (e) {
+        // The deploy fee may ALREADY be paid on-chain. Surface fee_tx_hash + the signed
+        // payload so the caller can RETRY authorize_task with them instead of re-paying
+        // (the fee is per-task; paying twice loses money).
+        const msg = e instanceof Error ? e.message : String(e);
+        if (feeTx) {
+            throw new Error(`${msg} — deploy fee ALREADY PAID (fee_tx_hash: ${feeTx}). Retry authorize_task with { task_id: "${task_id}", fee_tx_hash: "${feeTx}"${payload ? `, signed_payment: "<the same payload>"` : ""} } — do NOT re-pay.`);
+        }
+        throw e;
+    }
 }));
 server.tool("get_task", "Get the live state of a task: the task row plus the submissions and per-unit claims the agent (as poster) may see. Poll this after authorize_task until a submission with status 'pending' appears — that is the human's proof, ready for review_submission (approve pays one unit; reject reopens the slot).", { task_id: z.string().uuid() }, async ({ task_id }) => guard(() => client.rest("GET", `/api/tasks/${task_id}`)));
 server.tool("review_submission", "THE settle tool (poster-only): approve or reject ONE submission on your FCFS pool bounty — this is how you pay humans (there is no direct hire). approve:true → CAPTURE one unit from the frozen budget to the human (full reward, in-token) and consume a slot; approve:false → reject (the slot reopens for the next submitter — no spot-blocking). Poll get_task for pending submissions and review each one. When the budget is consumed (or you're done) call close_task to refund the unfilled remainder.", {
