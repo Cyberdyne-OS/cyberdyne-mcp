@@ -24,7 +24,7 @@ import { generatePrivateKey, privateKeyToAccount, mnemonicToAccount } from "viem
 import { bytesToHex } from "viem";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
-import { readConfig, readSavedWalletKey, saveTokenAndWallet } from "./client.js";
+import { readConfig, readSavedWalletKey, saveTokenAndWallet, configPath as configFilePath } from "./client.js";
 /** Normalise a private key to the 0x-prefixed form viem expects. */
 function normalizeKey(pk) {
     return (pk.startsWith("0x") ? pk : `0x${pk}`);
@@ -146,6 +146,14 @@ export async function onboard(env = process.env, opts = {}) {
     const HOST = new URL(apiUrl).host;
     const { account, privateKey, generated, imported } = resolveWallet(env, opts);
     const address = account.address;
+    // Idempotency / no key churn: if we REUSED the saved wallet (not a fresh generate/import)
+    // and a valid cyb_ token is already saved, RETURN it as-is. Minting again would REVOKE the
+    // old key and 401 any running session still holding it — the recurring re-onboard footgun.
+    // `onboard --create` / `--import` (a NEW wallet) or a missing token still mints below.
+    const savedToken = readConfig(env).token;
+    if (!generated && !imported && savedToken?.startsWith("cyb_")) {
+        return { address, apiKey: savedToken, generated: false, imported: false, configPath: configFilePath(), bankr: undefined };
+    }
     const jar = new Map();
     // 1. nonce
     const nonceRes = await fetch(`${apiUrl}/api/auth/siwe/nonce`, { headers: { accept: "application/json" } });

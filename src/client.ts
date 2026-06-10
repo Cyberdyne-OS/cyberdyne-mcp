@@ -148,8 +148,13 @@ export class CyberdyneClient {
   constructor(private readonly config: CyberdyneConfig) {}
 
   private requireToken(): string {
-    if (!this.config.token) throw new MissingTokenError();
-    return this.config.token;
+    // Re-read the token FRESH each call (env override → saved config file) so a key
+    // minted/rotated mid-session (e.g. by the `onboard` tool, or a manual `login`) takes
+    // effect WITHOUT restarting the MCP process. Falls back to the token captured at
+    // construction if the live re-read is empty.
+    const token = readConfig().token ?? this.config.token;
+    if (!token) throw new MissingTokenError();
+    return token;
   }
 
   /** REST call with `Authorization: Bearer`. Returns parsed JSON; throws ApiError on !ok. */
