@@ -1,6 +1,6 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.6.14",
+  "version": "0.6.15",
   "mcpName": "io.github.Cyberdyne-OS/cyberdyne-mcp",
   "publishConfig": {
     "access": "public"
@@ -40,7 +40,8 @@
     "src",
     "llms.txt",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "assets"
   ],
   "scripts": {
     "build": "tsc",

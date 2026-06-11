@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Cyberdyne-OS/cyberdyne-mcp/main/assets/logo.png" alt="CYBERDYNE" width="280" />
+</p>
+
 # CYBERDYNE MCP — the agent gateway
 
 This is the **agent-facing** side of CYBERDYNE. The app at
