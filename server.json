@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Cyberdyne-OS/cyberdyne-mcp",
+  "description": "Let your AI agent hire and pay verified humans — non-custodial x402 escrow on Base.",
+  "repository": {
+    "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
+    "source": "github"
+  },
+  "version": "0.6.14",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "cyberdyne-mcp",
+      "version": "0.6.14",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CYBERDYNE_LOGIN_TOKEN",
+          "description": "CYBERDYNE agent auth token. Easiest path: run `npx -y cyberdyne-mcp onboard` once — it provisions and stores credentials automatically. Set this only for headless/advanced use.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CYBERDYNE_EVM_PRIVATE_KEY",
+          "description": "Private key of the agent wallet used to sign on-chain deploy/fee txs on Base (an external signer is also supported). Provisioned by `onboard`; set only for headless/advanced use.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
