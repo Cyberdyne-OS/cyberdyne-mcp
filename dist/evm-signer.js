@@ -13,7 +13,7 @@
  * Nothing here moves funds or pays gas; it only produces a signature.
  */
 import { privateKeyToAccount } from "viem/accounts";
-import { createPublicClient, createWalletClient, getAddress, http, isAddress, nonceManager, parseUnits } from "viem";
+import { createPublicClient, createWalletClient, getAddress, http, isAddress, maxUint256, nonceManager, parseUnits } from "viem";
 import { base, baseSepolia } from "viem/chains";
 import { AuthCaptureEvmScheme, toClientEvmSigner } from "@x402/evm";
 import { readSavedWalletKey } from "./client.js";
@@ -110,11 +110,58 @@ export function evmAddress() {
         throw new Error("no signing key (set CYBERDYNE_EVM_PRIVATE_KEY or run `cyberdyne-mcp onboard`)");
     return privateKeyToAccount((pk.startsWith("0x") ? pk : `0x${pk}`)).address;
 }
+/** Canonical Uniswap Permit2 (same address on every chain). */
+const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
+const ERC20_PERMIT2_ABI = [
+    { name: "allowance", type: "function", stateMutability: "view", inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }], outputs: [{ type: "uint256" }] },
+    { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
+];
+/**
+ * Permit2-method tokens (BNKR / GITLAWB / any non-EIP-3009 ERC-20) require a ONE-TIME
+ * ERC-20 approval to the canonical Permit2 contract before the operator's on-chain
+ * `authorize` can pull the frozen budget. The agent signs the Permit2 transfer
+ * authorization, but the underlying ERC-20→Permit2 allowance is a SEPARATE on-chain tx
+ * the agent's wallet must send once per token. Without it the budget freeze REVERTS —
+ * while the deploy fee (a plain transfer) still succeeds, masking the cause. EIP-3009
+ * tokens (USDC) need no approval. Idempotent: a no-op once the allowance covers the budget.
+ */
+async function ensurePermit2Approval(requirements) {
+    const r = (requirements ?? {});
+    if (r.extra?.assetTransferMethod !== "permit2")
+        return; // EIP-3009 / USDC: nothing to approve
+    const token = r.asset;
+    if (!token || !isAddress(token))
+        return;
+    const owner = getAddress(evmAddress());
+    const need = (() => { try {
+        return BigInt(r.amount ?? 0);
+    }
+    catch {
+        return 0n;
+    } })();
+    const pub = createPublicClient({ chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    const allowance = (await pub.readContract({
+        address: getAddress(token), abi: ERC20_PERMIT2_ABI, functionName: "allowance", args: [owner, PERMIT2_ADDRESS],
+    }));
+    if (allowance >= need && allowance > 0n)
+        return; // already approved enough
+    // Approve max once so future budgets on this token never re-approve. The agent pays this gas.
+    const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    const hash = await wallet.writeContract({
+        address: getAddress(token), abi: ERC20_PERMIT2_ABI, functionName: "approve", args: [PERMIT2_ADDRESS, maxUint256], chain: chain(),
+    });
+    const receipt = await pub.waitForTransactionReceipt({ hash, confirmations: 1 });
+    if (receipt.status !== "success")
+        throw new Error(`Permit2 approval tx ${hash} reverted — budget cannot be frozen for ${token}`);
+}
 /**
  * Sign the auth-capture requirements (the `authIntent.requirements` the platform
  * returns) → base64 payload the platform's authorize route consumes as `signedPayment`.
+ * For Permit2-method tokens this first ensures the agent wallet has approved Permit2
+ * (a prerequisite the on-chain freeze needs but the signature alone doesn't set).
  */
 export async function signAuthCapture(requirements) {
+    await ensurePermit2Approval(requirements);
     const result = await scheme().createPaymentPayload(2, requirements);
     return Buffer.from(JSON.stringify(result)).toString("base64");
 }
