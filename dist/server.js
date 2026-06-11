@@ -234,6 +234,19 @@ server.tool("authorize_task", "Freeze the bounty budget on-chain (the second ste
         }
         if (!feeTx && df) {
             const f = df;
+            // H1 sanity bound (defense-in-depth vs a poisoned/MITM'd API response): a deploy fee
+            // paid in the SAME token as the frozen budget must not exceed a small fraction of it
+            // (5% tier + slack = 6%), so a bad response can't direct an oversized transfer out of
+            // the agent's wallet. Cross-token (BNKR-priced) fees can't be ratio-compared — skipped.
+            const req = (ai && typeof ai === "object") ? (ai.requirements ?? ai) : null;
+            if (req?.asset && req?.amount != null && String(f.token).toLowerCase() === String(req.asset).toLowerCase()) {
+                const { parseUnits } = await import("viem");
+                const feeWei = parseUnits(Number(f.amount).toFixed(Number(f.decimals)), Number(f.decimals));
+                const budgetWei = BigInt(req.amount);
+                if (feeWei > (budgetWei * 6n) / 100n) {
+                    throw new Error(`deploy fee ${f.amount} is implausibly large (> 6% of the frozen budget) — refusing to pay. Re-post the task; if it persists the API response may be wrong/tampered.`);
+                }
+            }
             feeTx = await payDeployFee({ amount: f.amount, decimals: f.decimals, recipient: f.recipient, token: f.token });
         }
     }

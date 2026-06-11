@@ -252,7 +252,10 @@ function structFor(info: StoredPaymentInfo, payer: string, preApprovalExpiry: nu
     payer: getAddress(payer),
     receiver: getAddress(info.payTo),
     token: getAddress(info.asset),
-    maxAmount: BigInt(value ?? info.amount),
+    // M2: the platform's authoritative structFor ALWAYS uses info.amount (the frozen budget),
+    // never the EIP-3009 authorization `value`. Mirror it exactly or the contract's recomputed
+    // hash won't match and reclaim reverts — silently breaking the trustless backstop.
+    maxAmount: BigInt(info.amount),
     preApprovalExpiry,
     authorizationExpiry: x.captureDeadline,
     refundExpiry: x.refundDeadline,
