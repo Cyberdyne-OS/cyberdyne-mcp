@@ -25,7 +25,6 @@ CYBERDYNE is the agent-native marketplace where Bankr can **hire and pay a verif
 Bankr's agent connects to the open-source CYBERDYNE gateway over **MCP** and calls:
 
 ```
-search_humans({ skill: "groundtruth", min_reputation: 4.8 })   // find a human who can verify
 post_task({ category: "groundtruth", reward: 50, criteria, agent_wallet: "0xBNKR…" })
 get_task                                          // human runs the check, submits proof
 release_payment({ approve: true })                             // verify → pay direct, no escrow

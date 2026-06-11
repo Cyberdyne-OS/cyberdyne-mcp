@@ -7,7 +7,6 @@
  * every tool is a thin, typed wrapper over an HTTP endpoint on the live backend.
  *
  *   list_categories  — the static task taxonomy (no network)
- *   search_humans    — POST /api/a2a {search_humans}      → capability index
  *   post_task        — POST /api/tasks                    → open an FCFS pool bounty
  *   authorize_task   — POST /api/tasks/[id]/authorize     → sign budget + pay fee + freeze
  *   get_task         — GET  /api/tasks/[id]               → status + submissions/claims
@@ -15,10 +14,8 @@
  *   close_task       — POST /api/tasks/[id]/close         → refund the unfilled budget (operator voids)
  *   reclaim          — on-chain reclaim(paymentInfo)      → trustless self-recovery, payer-only, no operator
  *
- * Auth: every networked tool sends the agent's `cyb_…` key. The REST routes take
- * it as `Authorization: Bearer …`; search_humans goes through the a2a JSON-RPC
- * gateway (the REST GET /api/humans is session-only), which carries the key as
- * `identity_token`.
+ * Auth: every networked tool sends the agent's `cyb_…` key as
+ * `Authorization: Bearer …`.
  *
  * The HUMAN submit-proof step happens in the app/UI (human-only — agents cannot
  * submit on a human's behalf). There is ONE settlement model for real tokens:
@@ -254,27 +251,6 @@ server.tool(
 );
 
 server.tool(
-  "search_humans",
-  "Find verified humans by capability via the live capability index (a2a gateway). Filters are optional and combine (AND). Results are role='human' profiles ranked by reputation, projected to public columns (no wallets/balances). Note: `skills` is an array.",
-  {
-    skills: z
-      .array(z.enum(TASK_CATEGORIES))
-      .optional()
-      .describe("Task categories the human must be able to do (all must match)."),
-    min_reputation: z.number().min(0).max(5).optional().describe("Minimum reputation (0–5)."),
-    location: z.string().optional().describe("Substring match on location, e.g. 'ES', 'Tokyo'."),
-  },
-  async ({ skills, min_reputation, location }) =>
-    guardUntrusted(() =>
-      client.a2a<{ humans: unknown[] }>("search_humans", {
-        ...(skills ? { skills } : {}),
-        ...(min_reputation != null ? { min_reputation } : {}),
-        ...(location ? { location } : {}),
-      }),
-    ),
-);
-
-server.tool(
   "post_task",
   "Open an FCFS pool bounty on the marketplace. There is NO direct hire and NO agent-picks-human — every task is an open bounty: you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission. Funds are NOT charged at post — the budget is frozen later at authorize_task. `reward_usd` is the total budget; `quantity` is how many identical units (humans) it pays — each unit holds reward_usd/quantity (each unit must be >= $0.01). Returns the created task (with its id) plus `authIntent` (the budget authorization to sign) and `deployFee` { usd, bps, recipient, token } (a SEPARATE non-refundable fee tx) — pass BOTH to authorize_task. The non-custodial POOL escrow (USDC/BNKR/GITLAWB on Base) is the only settlement rail; a non-real token (CYOS) or non-live config has no rail and returns 422 settlement_unavailable.",
   {
@@ -497,6 +473,6 @@ await server.connect(transport);
 console.error(
   `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no key — run `npx cyberdyne-mcp onboard` to self-generate a wallet + key, or `login cyb_…`, or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
-    ". Tools (9): onboard, list_categories, search_humans, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
+    ". Tools (8): onboard, list_categories, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
     " CLI: onboard, login, post, tasks.",
 );

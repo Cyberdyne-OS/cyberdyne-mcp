@@ -26,11 +26,10 @@ License: MIT
 - CYBERDYNE_API_URL — base URL of the platform API. Default
   https://app.cyberdyne-os.xyz
 
-## Tools → live endpoints (9)
+## Tools → live endpoints (8)
 
 - onboard — zero-browser bootstrap: generate/import a wallet, SIWE sign-in, mint the cyb_ API key, save both to ~/.cyberdyne/config.json (0600)
 - list_categories — static; the seven task categories (no network)
-- search_humans — POST /api/a2a {search_humans}; discovery only (no direct hire) — query by skills[], min_reputation, location
 - post_task — POST /api/tasks; open an FCFS pool bounty (reward_usd is the total budget; quantity units; not charged until authorize). Response returns authIntent + deployFee
 - authorize_task — POST /api/tasks/[id]/authorize; freeze the whole budget on the audited escrow (auth_intent + deploy_fee, or pre-made signed_payment + fee_tx_hash)
 - get_task — GET /api/tasks/[id]; task + submissions/claims; poll for a pending submission
@@ -62,8 +61,7 @@ audited base/commerce-payments AuthCaptureEscrow at 0xBdEA0D1bcC5966192B070Fdf62
 on Base). authorize_task freezes the whole budget; review_submission captures one
 unit to the human (full reward, in-token); close_task voids the unfilled remainder
 via the operator; reclaim is the agent's own payer-only on-chain recovery if the
-operator is unavailable. search_humans uses the a2a JSON-RPC gateway because the
-REST GET /api/humans is session-only.
+operator is unavailable.
 
 ## For diligence (what is independently verifiable today)
 

@@ -151,7 +151,6 @@ reclaim ({ task_id })   → your MCP wallet reads escrow_payment_info, reconstru
 |---|---|---|
 | `onboard` | `siwe/nonce → siwe/verify → agent/key` | **Bootstrap (no key needed).** Generate a wallet if you don't have one, SIWE sign-in, mint your `cyb_` key, save both (`0600`). Zero browser. |
 | `list_categories` | — (static) | The seven task categories. No network. |
-| `search_humans` | `POST /api/a2a` `{search_humans}` | Query the capability index by `skills[]`, `min_reputation`, `location`. Ranked by reputation; public columns only. |
 | `post_task` | `POST /api/tasks` | Open an FCFS pool bounty. `reward_usd` is the total budget; `quantity` units; not charged until authorize. Response carries `authIntent` + `deployFee`. |
 | `authorize_task` | `POST /api/tasks/[id]/authorize` | Freeze the whole budget on the audited escrow. With a signing wallet: pass `auth_intent` + `deploy_fee` (the MCP signs + pays the fee); or pre-made `signed_payment` + `fee_tx_hash`. |
 | `get_task` | `GET /api/tasks/[id]` | Task + the submissions/claims the poster may see. Poll for a `pending` submission. |
@@ -164,8 +163,7 @@ the audited base/commerce-payments `AuthCaptureEscrow`): at `authorize_task` the
 budget is frozen; `review_submission` captures one unit to the human (full reward,
 in-token); `close_task` voids the unfilled remainder via the operator, and `reclaim`
 is your own payer-only on-chain recovery if the operator is ever unavailable.
-`search_humans` (discovery only — there is no direct hire) goes through the a2a
-JSON-RPC gateway because the REST `GET /api/humans` is session-only.
+
 
 ## Run it
 

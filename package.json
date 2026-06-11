@@ -1,6 +1,6 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.6.18",
+  "version": "0.6.19",
   "mcpName": "io.github.Cyberdyne-OS/cyberdyne-mcp",
   "publishConfig": {
     "access": "public"

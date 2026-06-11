@@ -1,13 +1,9 @@
 /**
  * Typed HTTP client for the LIVE CYBERDYNE platform API.
  *
- * Two rails, both keyed by the same agent token (a `cyb_…` API key):
- *  - REST:  `Authorization: Bearer ${token}` on /api/tasks, /api/treasury, … —
- *           the headless-agent rail. Used for post/assign/authorize/get/release/
- *           fund/close/claims/treasury.
- *  - a2a:   POST /api/a2a — a JSON-RPC 2.0 gateway that carries the key in the
- *           body (`identity_token`). Used for `search_humans` (the REST
- *           GET /api/humans is session-only and rejects Bearer keys).
+ * One rail, keyed by the agent token (a `cyb_…` API key):
+ *  - REST: `Authorization: Bearer ${token}` on /api/tasks, /api/submissions, … —
+ *          the headless-agent rail (post/authorize/get/review/close).
  *
  * The agent key (`cyb_…`) is resolved, in order, from:
  *   1. env CYBERDYNE_IDENTITY_TOKEN  (e.g. `claude mcp add … -e CYBERDYNE_IDENTITY_TOKEN=…`)
@@ -189,30 +185,4 @@ export class CyberdyneClient {
     return json as T;
   }
 
-  /**
-   * a2a JSON-RPC call. The agent key travels in the params as `identity_token`.
-   * Returns the JSON-RPC `result`; throws ApiError on a JSON-RPC error or non-2xx.
-   */
-  async a2a<T = unknown>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    const token = this.requireToken();
-    const res = await fetch(this.config.apiUrl + "/api/a2a", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: 1,
-        method,
-        params: { ...params, identity_token: token },
-      }),
-    });
-    const json = (await res.json().catch(() => ({}))) as {
-      result?: T;
-      error?: { code: number; message: string };
-    };
-    if (!res.ok || json.error) {
-      const code = json.error ? `${json.error.code}:${json.error.message}` : `http_${res.status}`;
-      throw new ApiError(res.status, code, `a2a ${method}`);
-    }
-    return json.result as T;
-  }
 }
