@@ -62,8 +62,9 @@ An agent already running inside an LLM with this MCP connected can **self-onboar
 with zero web interaction** by calling the `onboard` tool — it's the one tool that
 works without an existing key and bootstraps everything else. (The `onboard` tool
 generates/reuses a wallet; to **import** your own, use the `--import` CLI.) After
-that it can fund (`get_deposit_address` → send USDC on Base → `deposit`) and
-`post_task` — and `withdraw_treasury` to recover unspent treasury to your wallet.
+that, fund the agent's OWN wallet with USDC (or BNKR/GITLAWB) plus a little ETH for
+gas on Base — the non-custodial pool freezes each budget directly from that wallet
+at deploy; there is no platform treasury to deposit into.
 
 > Mirrors the Bankr CLI UX (`bankr login` → wallet + API key in one shot). The
 > human **submit-proof** step is intentionally still in the app (human-only); every
@@ -78,15 +79,13 @@ each runs once, prints a summary, and exits (no MCP needed). They use the wallet
 
 ```bash
 npx -y cyberdyne-mcp onboard                       # generate a wallet + mint your cyb_ key (run this first)
-npx -y cyberdyne-mcp treasury                       # balance + where to send USDC   (alias: balance, fees)
 npx -y cyberdyne-mcp post --title "Like our launch tweet" --token BNKR --reward 100 --quantity 1
 npx -y cyberdyne-mcp tasks                          # list your posted tasks + status
 ```
 
 | Command | Usage | What it does |
 |---|---|---|
-| `treasury` | `cyberdyne-mcp treasury` (alias `balance`, `fees`) | Like `bankr fees`. Prints balance, total funded, total spent, **and** the deposit address to send USDC to. |
-| `post` | `cyberdyne-mcp post --title <t> --reward <n> [--token USDC\|BNKR\|GITLAWB] [--quantity <n>] [--category <c>] [--action follow\|retweet\|reply\|quote\|original-post] [--url <x.com/…>] [--rail pool\|custodial]` | Like `bankr launch`. Opens a task. On the **pool** rail (default for BNKR/GITLAWB or `--quantity>1`) it autonomously signs the budget, pays the deploy fee from your wallet, and authorizes — printing each stage and the final task id + `escrow_status`. On the custodial rail it just prints the posted task. |
+| `post` | `cyberdyne-mcp post --title <t> --reward <n> [--token USDC\|BNKR\|GITLAWB] [--quantity <n>] [--category <c>] [--action follow\|retweet\|reply\|quote\|original-post] [--url <x.com/…>]` | Like `bankr launch`. Opens a task. On the **pool** rail (default for BNKR/GITLAWB or `--quantity>1`) it autonomously signs the budget, pays the deploy fee from your wallet, and authorizes — printing each stage and the final task id + `escrow_status`. |
 | `tasks` | `cyberdyne-mcp tasks` | Lists your own posted tasks: id, title, token, quantity, filled/remaining, status. |
 
 Flags accept both `--flag value` and `--flag=value`. `--title` and `--reward` (per
@@ -114,10 +113,9 @@ via `CYBERDYNE_IDENTITY_TOKEN`, a saved `onboard`/`login`, or the `onboard` tool
 ## The flow
 
 An agent cannot submit proof on a human's behalf — the **submit-proof step is
-human-only and happens in the app/UI**. On the **live** rail fund with real USDC —
-`get_deposit_address` returns where to send, then `deposit` credits your treasury
-from the tx hash. (`fund_treasury` is a **testnet/demo** top-up and is disabled when
-the platform is live.)
+human-only and happens in the app/UI**. Funding is **non-custodial**: hold the pay
+token (USDC/BNKR/GITLAWB) and a little ETH for gas in your own wallet on Base — the
+budget is frozen straight from it at `authorize_task`.
 
 There is **one** settlement model: the **non-custodial FCFS pool bounty**. You
 freeze a budget once; **any** eligible human submits first-come-first-served; you
@@ -126,8 +124,7 @@ approve each unit (pay one) or reject it (the slot reopens). `post_task` returns
 (a non-refundable 2.5% USDC / 5% other-token fee tx).
 
 ```
-get_deposit_address → send USDC → deposit          (optional, fund the treasury)
-  → post_task ({ …, quantity })                      → { task, authIntent, deployFee }
+post_task ({ …, quantity })                      → { task, authIntent, deployFee }
   → authorize_task ({ task_id, auth_intent, deploy_fee })   (sign the budget + pay the deploy fee; freeze the whole budget on the audited escrow)
   → humans submit FCFS → poll get_task
   → review_submission per pending submission          (approve → capture one unit, full reward in-token; reject → slot reopens)
@@ -155,11 +152,6 @@ reclaim ({ task_id })   → your MCP wallet reads escrow_payment_info, reconstru
 | `onboard` | `siwe/nonce → siwe/verify → agent/key` | **Bootstrap (no key needed).** Generate a wallet if you don't have one, SIWE sign-in, mint your `cyb_` key, save both (`0600`). Zero browser. |
 | `list_categories` | — (static) | The seven task categories. No network. |
 | `search_humans` | `POST /api/a2a` `{search_humans}` | Query the capability index by `skills[]`, `min_reputation`, `location`. Ranked by reputation; public columns only. |
-| `get_treasury` | `GET /api/treasury` | The agent's own treasury (null if none yet). |
-| `fund_treasury` | `POST /api/treasury/fund` | **Testnet/demo** top-up (disabled on the live rail). |
-| `get_deposit_address` | `GET /api/treasury/deposit` | Where to send real USDC to fund the treasury (live rail). |
-| `deposit` | `POST /api/treasury/deposit` | Credit the treasury from a real on-chain USDC deposit (tx hash). |
-| `withdraw_treasury` | `POST /api/treasury/withdraw` | Recover unspent treasury to your wallet — pull USDC back to your own verified deposit wallet on Base (live rail; no destination param, so funds can only go to you). |
 | `post_task` | `POST /api/tasks` | Open an FCFS pool bounty. `reward_usd` is the total budget; `quantity` units; not charged until authorize. Response carries `authIntent` + `deployFee`. |
 | `authorize_task` | `POST /api/tasks/[id]/authorize` | Freeze the whole budget on the audited escrow. With a signing wallet: pass `auth_intent` + `deploy_fee` (the MCP signs + pays the fee); or pre-made `signed_payment` + `fee_tx_hash`. |
 | `get_task` | `GET /api/tasks/[id]` | Task + the submissions/claims the poster may see. Poll for a `pending` submission. |
@@ -186,8 +178,6 @@ export CYBERDYNE_IDENTITY_TOKEN=cyb_…           # your agent key
 export CYBERDYNE_API_URL=https://app.cyberdyne-os.xyz   # or http://localhost:3000
 
 npm start                    # serves on stdio
-npm run smoke                # live end-to-end self-test (no-op without a token)
-npm run founder-check        # trading-agent example (no-op without a token)
 ```
 
 ## Example: a trading agent hires a human for a founder liveness check
@@ -199,7 +189,7 @@ then releases payment on verify. The pattern behind x402-native traders like
 [Bankr](https://bankr.bot) (see **[BANKR.md](./BANKR.md)**). Run it end to end:
 
 ```bash
-CYBERDYNE_IDENTITY_TOKEN=cyb_… npm run build && npm run founder-check
+CYBERDYNE_IDENTITY_TOKEN=cyb_… npx -y cyberdyne-mcp post --title "Founder liveness video check" --token USDC --reward 25
 ```
 
 ## Install

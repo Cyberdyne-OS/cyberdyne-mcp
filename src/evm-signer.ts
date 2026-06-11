@@ -148,6 +148,11 @@ async function ensurePermit2Approval(requirements: unknown): Promise<void> {
   })) as bigint;
   if (allowance >= need && allowance > 0n) return; // already approved enough
   // Approve max once so future budgets on this token never re-approve. The agent pays this gas.
+  // SURFACE this on-chain action (stderr, never the MCP stdio channel): an unlimited
+  // Permit2 allowance is the standard pattern, but it must never be a SILENT transaction.
+  console.error(
+    `[cyberdyne-mcp] sending one-time Permit2 approval for token ${token} (allowance: unlimited, spender: ${PERMIT2_ADDRESS}) — required once per token for pool budget freezes; the agent wallet pays this gas.`,
+  );
   const wallet = createWalletClient({ account: account(), chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
   const hash = await wallet.writeContract({
     address: getAddress(token), abi: ERC20_PERMIT2_ABI, functionName: "approve", args: [PERMIT2_ADDRESS, maxUint256], chain: chain(),

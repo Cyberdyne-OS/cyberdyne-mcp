@@ -142,7 +142,7 @@ export async function runPost(argv) {
         const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
         console.error(`  ✓ fee paid — ${feeTx}`);
         console.error("→ freezing the budget (authorize)…");
-        const authed = await c.rest("POST", `/api/tasks/${taskId}/authorize`, { body: { signedPayment, fee_tx_hash: feeTx } });
+        const authed = await c.rest("POST", `/api/tasks/${encodeURIComponent(taskId)}/authorize`, { body: { signedPayment, fee_tx_hash: feeTx } });
         const escrow = authed.task?.escrow_status ?? "held";
         console.error(`\n✓ Launched. task ${taskId} — escrow_status: ${escrow}. ` +
             "Humans can now claim + submit FCFS; review each submission to capture a unit.");

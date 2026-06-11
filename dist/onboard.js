@@ -233,7 +233,11 @@ export async function onboard(env = process.env, opts = {}) {
         configPath = saveTokenAndWallet(apiKey, privateKey);
     }
     catch (e) {
-        throw new Error(`minted agent key ${apiKey} but failed to save ~/.cyberdyne/config.json: ${e instanceof Error ? e.message : String(e)} — run \`npx cyberdyne-mcp login ${apiKey}\` to save it manually.`);
+        // Print the live key to STDERR only (the console), NEVER in the thrown error —
+        // the error message travels through the MCP tool-result channel into the calling
+        // LLM's context/transcripts, which would leak the credential.
+        console.error(`[cyberdyne-mcp] minted agent key (save failed): ${apiKey}\n  save it manually with:  echo ${apiKey} | npx cyberdyne-mcp login`);
+        throw new Error(`minted agent key ${apiKey.slice(0, 10)}… but failed to save ~/.cyberdyne/config.json: ${e instanceof Error ? e.message : String(e)} — the FULL key was printed to the console (stderr); save it with \`npx cyberdyne-mcp login\`.`);
     }
     // 6. (optional) auto-link Bankr — zero human interaction. If a bk_ key is supplied
     //    (opts or CYBERDYNE_BANKR_KEY), use it ONCE to connect the agent's Bankr project

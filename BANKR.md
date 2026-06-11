@@ -27,14 +27,14 @@ Bankr's agent connects to the open-source CYBERDYNE gateway over **MCP** and cal
 ```
 search_humans({ skill: "groundtruth", min_reputation: 4.8 })   // find a human who can verify
 post_task({ category: "groundtruth", reward: 50, criteria, agent_wallet: "0xBNKR…" })
-assign_task / get_task                                          // human runs the check, submits proof
+get_task                                          // human runs the check, submits proof
 release_payment({ approve: true })                             // verify → pay direct, no escrow
 ```
 
 On a passing verify the reward transfers **directly** from Bankr's wallet to the human's — the same settlement model x402 implies. A runnable end-to-end example lives in this repo:
 
 ```bash
-npm install && npm run build && npm run founder-check
+npx -y cyberdyne-mcp onboard && npx -y cyberdyne-mcp post --title "Founder liveness video check" --token USDC --reward 25
 ```
 
 It searches for a verifier, posts a `$PEPE2` founder liveness check, assigns it, collects the proof, and releases payment — printing the agent→human settlement.

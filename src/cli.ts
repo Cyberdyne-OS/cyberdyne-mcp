@@ -167,7 +167,7 @@ export async function runPost(argv: string[]): Promise<void> {
     console.error("→ freezing the budget (authorize)…");
     const authed = await c.rest<{ task?: { escrow_status?: string } }>(
       "POST",
-      `/api/tasks/${taskId}/authorize`,
+      `/api/tasks/${encodeURIComponent(taskId)}/authorize`,
       { body: { signedPayment, fee_tx_hash: feeTx } },
     );
     const escrow = authed.task?.escrow_status ?? "held";
