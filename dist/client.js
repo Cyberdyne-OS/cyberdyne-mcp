@@ -94,6 +94,19 @@ export function saveTokenAndWallet(token, walletKey) {
     return writeConfigFile({ identity_token: token.trim(), walletKey: walletKey.trim() });
 }
 /**
+ * Drop a CONFIRMED-DEAD saved identity_token from ~/.cyberdyne/config.json, preserving
+ * the walletKey. Used when an authed probe proves the key is revoked server-side (401/
+ * any non-2xx) — discarding it immediately means a later failed re-mint can never leave
+ * the dead key behind to wedge the agent. Returns the config path.
+ */
+export function discardSavedToken() {
+    const existing = readSavedConfig();
+    const next = {};
+    if (typeof existing.walletKey === "string" && existing.walletKey.trim())
+        next.walletKey = existing.walletKey.trim();
+    return writeConfigFile(next);
+}
+/**
  * Last resort (config save failed): write the live minted key to a FRESH 0600 recovery
  * file — never to stderr/logs and never into a thrown error (which would reach the LLM
  * via the MCP tool-result channel). Returns the path, or "" if even this fails.

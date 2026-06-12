@@ -24,7 +24,7 @@ import { generatePrivateKey, privateKeyToAccount, mnemonicToAccount } from "viem
 import { bytesToHex } from "viem";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
-import { readConfig, readSavedWalletKey, saveTokenAndWallet, saveKeyRecovery, configPath as configFilePath } from "./client.js";
+import { readConfig, readSavedWalletKey, saveTokenAndWallet, saveKeyRecovery, discardSavedToken, configPath as configFilePath } from "./client.js";
 /** Normalise a private key to the 0x-prefixed form viem expects. */
 function normalizeKey(pk) {
     return (pk.startsWith("0x") ? pk : `0x${pk}`);
@@ -154,18 +154,29 @@ export async function onboard(env = process.env, opts = {}) {
     if (!generated && !imported && savedToken?.startsWith("cyb_")) {
         // VALIDATE the saved key is still live before reusing it — a server-side-revoked key
         // would otherwise wedge every networked tool with no recovery. A cheap authed GET
-        // confirms it; on 401/revoked we FALL THROUGH to the SIWE→mint chain below.
+        // confirms it, and ONLY a confirmed-valid response (2xx + a parseable JSON object
+        // with no error envelope) counts: a 401 — or ANY non-2xx — proves the key is dead,
+        // so we DISCARD it from ~/.cyberdyne/config.json immediately (a failed re-mint must
+        // never leave the dead key behind) and fall through to the SIWE→mint chain below.
         try {
             const probe = await fetch(`${apiUrl}/api/tasks?mine=posted&limit=1`, {
                 headers: { authorization: `Bearer ${savedToken}`, accept: "application/json" },
             });
             if (probe.ok) {
-                return { address, apiKey: savedToken, generated: false, imported: false, configPath: configFilePath(), bankr: undefined };
+                const body = (await probe.json().catch(() => null));
+                if (body && typeof body === "object" && !("error" in body)) {
+                    return { address, apiKey: savedToken, generated: false, imported: false, configPath: configFilePath(), bankr: undefined };
+                }
+                // 2xx but not the real authed payload (error envelope / unparseable) → NOT
+                // confirmed valid; treat as dead like any non-2xx.
             }
-            // not ok (401/403/…) → the saved key is dead; fall through and mint a fresh one.
+            // 401/403/any non-2xx (or an unconfirmable 2xx) → the saved key is dead. Discard
+            // it NOW, then fall through and mint a fresh one.
+            discardSavedToken();
         }
         catch {
-            // network error → don't trust the saved key blindly; fall through and re-mint.
+            // network error → can't confirm either way; don't reuse the key blindly (and don't
+            // discard it on a transient outage) — fall through and re-mint.
         }
     }
     const jar = new Map();
