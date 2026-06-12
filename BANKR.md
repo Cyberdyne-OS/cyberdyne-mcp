@@ -11,7 +11,7 @@ It's already great at the digital work — reading contracts, scanning holders, 
 - **Is a real person actually behind this?** Fake / impersonated / **deepfaked** founders are the #1 token scam, and an AI can't defeat a deepfake on a live video call. A human can.
 - **What's really being said live?** The truth surfaces in live Twitter Spaces / AMAs — a room an agent **can't join, read, or put a founder on the spot in.** A human can.
 
-CYBERDYNE is the agent-native marketplace where Bankr can **hire and pay a verified human** for exactly those — with **direct, no-escrow settlement** (agent wallet → human wallet on a passing verify). Two agent-native products that already speak the same payment language; the integration is a few MCP calls.
+CYBERDYNE is the agent-native marketplace where Bankr can **hire and pay a verified human** for exactly those — with **non-custodial pool-escrow settlement** on Base (the budget is frozen on-chain at post; on a passing verify, one unit is captured to the human's wallet — the agent never gives up custody until then). Two agent-native products that already speak the same payment language; the integration is a few MCP calls.
 
 ## What Bankr posts
 
@@ -25,18 +25,19 @@ CYBERDYNE is the agent-native marketplace where Bankr can **hire and pay a verif
 Bankr's agent connects to the open-source CYBERDYNE gateway over **MCP** and calls:
 
 ```
-post_task({ category: "groundtruth", reward: 50, criteria, agent_wallet: "0xBNKR…" })
-get_task                                          // human runs the check, submits proof
-release_payment({ approve: true })                             // verify → pay direct, no escrow
+post_task({ category: "groundtruth", reward_usd: 50, criteria })   // → authIntent + deployFee
+authorize_task({ task_id, auth_intent, deploy_fee })               // freeze the budget on the audited escrow + pay the deploy fee
+get_task                                                           // a human runs the check, submits proof in the app (FCFS)
+review_submission({ submission_id, approve: true })               // verify → capture one unit (full reward) to the human
 ```
 
-On a passing verify the reward transfers **directly** from Bankr's wallet to the human's — the same settlement model x402 implies. A runnable end-to-end example lives in this repo:
+On a passing verify, one unit is **captured from the frozen escrow** to the human's wallet — non-custodial, on the audited Base commerce-payments contract. A runnable end-to-end example lives in this repo:
 
 ```bash
 npx -y cyberdyne-mcp onboard && npx -y cyberdyne-mcp post --title "Founder liveness video check" --token USDC --reward 25
 ```
 
-It searches for a verifier, posts a `$PEPE2` founder liveness check, assigns it, collects the proof, and releases payment — printing the agent→human settlement.
+It posts a `$PEPE2` founder liveness check, freezes the budget on-chain, collects the proof (FCFS), and captures the payment to the human — printing the on-chain settlement.
 
 ## The pitch
 
@@ -46,6 +47,6 @@ It searches for a verifier, posts a `$PEPE2` founder liveness check, assigns it,
 
 ## Honest status
 
-CYBERDYNE is a pre-launch MVP. This gateway now drives the **live platform API** with the agent's own key (the fund → post → assign → authorize → release flow runs against the real backend), testnet-first, with the on-chain settle rail behind a manual rail. The verify → settle → score flow is demonstrable today; the live human network and production payouts are still being wired. Nothing here is a claim of an existing Bankr partnership — it's a concrete integration proposal.
+CYBERDYNE is live on Base mainnet (early-stage). This gateway drives the **live platform API** with the agent's own key — the post → authorize → review → close flow runs against the real backend with real, non-custodial, on-chain settlement (amounts are cent-scale by design while early). The live human network is still growing. Nothing here is a claim of an existing Bankr partnership — it's a concrete integration proposal.
 
 Contact: **serafino@cyberdyne-os.xyz** · Gateway: https://github.com/Cyberdyne-OS/cyberdyne-mcp

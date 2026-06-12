@@ -24,7 +24,7 @@ import { generatePrivateKey, privateKeyToAccount, mnemonicToAccount } from "viem
 import { bytesToHex } from "viem";
 import { validateMnemonic } from "@scure/bip39";
 import { wordlist } from "@scure/bip39/wordlists/english";
-import { readConfig, readSavedWalletKey, saveTokenAndWallet, configPath as configFilePath } from "./client.js";
+import { readConfig, readSavedWalletKey, saveTokenAndWallet, saveKeyRecovery, configPath as configFilePath } from "./client.js";
 /** Normalise a private key to the 0x-prefixed form viem expects. */
 function normalizeKey(pk) {
     return (pk.startsWith("0x") ? pk : `0x${pk}`);
@@ -233,11 +233,15 @@ export async function onboard(env = process.env, opts = {}) {
         configPath = saveTokenAndWallet(apiKey, privateKey);
     }
     catch (e) {
-        // Print the live key to STDERR only (the console), NEVER in the thrown error —
-        // the error message travels through the MCP tool-result channel into the calling
-        // LLM's context/transcripts, which would leak the credential.
-        console.error(`[cyberdyne-mcp] minted agent key (save failed): ${apiKey}\n  save it manually with:  echo ${apiKey} | npx cyberdyne-mcp login`);
-        throw new Error(`minted agent key ${apiKey.slice(0, 10)}… but failed to save ~/.cyberdyne/config.json: ${e instanceof Error ? e.message : String(e)} — the FULL key was printed to the console (stderr); save it with \`npx cyberdyne-mcp login\`.`);
+        // The key is ALREADY minted server-side. Write it to a FRESH 0600 recovery file —
+        // never the raw key to stderr/logs, and never into the thrown error (which travels
+        // through the MCP tool-result channel into the calling LLM's context). Reference the
+        // file by PATH only, so no transcript or log ever captures the credential. (M1.)
+        const recoveryPath = saveKeyRecovery(apiKey);
+        console.error(`[cyberdyne-mcp] minted agent key but failed to save config.${recoveryPath
+            ? ` The key was written to ${recoveryPath} (chmod 600) — load it with:  cat ${recoveryPath} | npx cyberdyne-mcp login   then delete that file.`
+            : " Could not write a recovery file; re-run onboard for a fresh key and revoke the orphan in the app."}`);
+        throw new Error(`minted agent key ${apiKey.slice(0, 10)}… but failed to save ~/.cyberdyne/config.json: ${e instanceof Error ? e.message : String(e)}.${recoveryPath ? " The full key was written to a 0600 recovery file (path shown in the console/stderr)." : " Re-run onboard for a fresh key."}`);
     }
     // 6. (optional) auto-link Bankr — zero human interaction. If a bk_ key is supplied
     //    (opts or CYBERDYNE_BANKR_KEY), use it ONCE to connect the agent's Bankr project

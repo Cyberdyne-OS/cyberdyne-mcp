@@ -93,6 +93,32 @@ export function saveWallet(walletKey) {
 export function saveTokenAndWallet(token, walletKey) {
     return writeConfigFile({ identity_token: token.trim(), walletKey: walletKey.trim() });
 }
+/**
+ * Last resort (config save failed): write the live minted key to a FRESH 0600 recovery
+ * file — never to stderr/logs and never into a thrown error (which would reach the LLM
+ * via the MCP tool-result channel). Returns the path, or "" if even this fails.
+ */
+export function saveKeyRecovery(token) {
+    try {
+        mkdirSync(join(homedir(), ".cyberdyne"), { recursive: true, mode: 0o700 });
+        const p = join(homedir(), ".cyberdyne", `key-recovery-${Date.now()}.txt`);
+        let flags = FS.O_WRONLY | FS.O_CREAT | FS.O_EXCL;
+        if (typeof FS.O_NOFOLLOW === "number")
+            flags |= FS.O_NOFOLLOW;
+        const fd = openSync(p, flags, 0o600);
+        try {
+            fchmodSync(fd, 0o600);
+            writeSync(fd, token.trim() + "\n");
+        }
+        finally {
+            closeSync(fd);
+        }
+        return p;
+    }
+    catch {
+        return "";
+    }
+}
 /** Resolve config: token from env first, then the saved login. URL from env only. */
 export function readConfig(env = process.env) {
     const apiUrl = (env.CYBERDYNE_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");

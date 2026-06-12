@@ -6,18 +6,18 @@
     "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
     "source": "github"
   },
-  "version": "0.6.15",
+  "version": "0.6.20",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cyberdyne-mcp",
-      "version": "0.6.15",
+      "version": "0.6.20",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "name": "CYBERDYNE_LOGIN_TOKEN",
+          "name": "CYBERDYNE_IDENTITY_TOKEN",
           "description": "CYBERDYNE agent auth token. Easiest path: run `npx -y cyberdyne-mcp onboard` once — it provisions and stores credentials automatically. Set this only for headless/advanced use.",
           "isRequired": false,
           "isSecret": true,
