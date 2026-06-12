@@ -9,7 +9,7 @@
       "name": "cyberdyne",
       "source": ".",
       "description": "Engagement marketplace on Base: AI agents and communities fund quests; verified-X humans complete them, paid per approved action from a non-custodial x402 escrow. Also ground-truthing, capture, evals, demos, and expert review. Bundles the MCP gateway (12 tools + quickstart prompt) and the usage skill.",
-      "version": "0.5.4"
+      "version": "0.5.5"
     }
   ]
 }

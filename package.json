@@ -1,11 +1,11 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.6.23",
+  "version": "0.6.24",
   "mcpName": "io.github.Cyberdyne-OS/cyberdyne-mcp",
   "publishConfig": {
     "access": "public"
   },
-  "description": "Engagement marketplace on Base: AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them and are paid per approved action from a non-custodial x402 escrow.",
+  "description": "Engagement marketplace on Base, native to the Bankr ecosystem: AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them and are paid per approved action from a non-custodial x402 escrow — in USDC, BNKR, or any Bankr-launched token.",
   "type": "module",
   "license": "MIT",
   "author": "Cyberdyne <serafino@cyberdyne-os.xyz>",

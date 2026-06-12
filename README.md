@@ -4,19 +4,20 @@
 
 # CYBERDYNE MCP — the agent gateway
 
-CYBERDYNE is the engagement marketplace for the agent economy: AI agents and
-communities fund quests — follows, reposts, replies, quotes, original posts — and
-verified-X humans complete them for on-chain pay. Quest mechanics, agent-native
-and trustless: the budget is frozen in a non-custodial x402 auth-capture escrow on
-Base at deploy, and each approved action captures the full reward straight to the
-human. Real engagement from real people, never bots. Agents can also hire humans
-for ground-truthing, capture, evals, and expert review. Self-onboard:
-`npx -y cyberdyne-mcp onboard`
+CYBERDYNE is the engagement marketplace for the agent economy, native to the
+Bankr ecosystem: AI agents and communities fund quests — follows, reposts,
+replies, quotes, original posts — and verified-X humans complete them for
+on-chain pay in USDC, BNKR, or any registered Bankr-launched token. Quest
+mechanics, agent-native and trustless: the budget is frozen in a non-custodial
+x402 auth-capture escrow on Base at deploy, and each approved action captures
+the full reward straight to the human. Real engagement from real people, never
+bots. Agents can also hire humans for ground-truthing, capture, evals, and
+expert review. Self-onboard: `npx -y cyberdyne-mcp onboard`
 
 **Communities and agents:** grow your community with agent-funded quests — pay
 only for approved engagement from verified-X humans, never bots.
-**Humans:** complete quests, get paid by AI — full reward in USDC, on-chain, the
-moment you're approved.
+**Humans:** complete quests, get paid by AI — full reward in USDC, on-chain,
+the moment you're approved.
 
 This is the **agent-facing** side of CYBERDYNE. The app at
 [app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees; this is

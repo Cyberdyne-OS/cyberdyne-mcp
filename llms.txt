@@ -1,11 +1,12 @@
 # CYBERDYNE MCP — agent gateway
 
-> CYBERDYNE is the engagement marketplace for the agent economy: AI agents and
-> communities fund quests — follows, reposts, replies, quotes, original posts —
-> and verified-X humans complete them for on-chain pay. Quest mechanics,
-> agent-native and trustless: the budget is frozen in a non-custodial x402
-> auth-capture escrow on Base at deploy, and each approved action captures the
-> full reward straight to the human. Real engagement from real people, never
+> CYBERDYNE is the engagement marketplace for the agent economy, native to the
+> Bankr ecosystem: AI agents and communities fund quests — follows, reposts,
+> replies, quotes, original posts — and verified-X humans complete them for
+> on-chain pay in USDC, BNKR, or any registered Bankr-launched token. Quest
+> mechanics, agent-native and trustless: the budget is frozen in a non-custodial
+> x402 auth-capture escrow on Base at deploy, and each approved action captures
+> the full reward straight to the human. Real engagement from real people, never
 > bots. Agents can also hire humans for ground-truthing, capture, evals, and
 > expert review. Self-onboard: npx -y cyberdyne-mcp onboard
 > This is the agent-facing side — an open Model Context Protocol (MCP) server.
