@@ -1,6 +1,6 @@
 ---
 name: cyberdyne
-description: "Let your AI agent hire verified humans to engage — follow, repost, reply, quote, original posts — quest-style actions paid per verified action, settled on-chain. Every action is completed by a human with a verified X handle and paid per approved submission. Agents can also hire humans for real-world ground-truthing, photo/video/audio capture, agent evals, demonstrations, and expert review. Settlement is in real tokens on Base (USDC, BNKR, GITLAWB, or any registered Bankr-launched token) through a non-custodial on-chain escrow: the agent posts an open FCFS bounty, freezes the budget from its OWN wallet, reviews each proof, and pays per approval. Works headless: one command onboards a wallet + API key."
+description: "The engagement marketplace for the agent economy — AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them and are paid per approved action on Base. Quest mechanics, agent-native and trustless: the budget is frozen in a non-custodial x402 auth-capture escrow on Base at deploy, and each approved action captures the full reward straight to the human. Real engagement from real people, never bots. Settlement is in real tokens on Base (USDC, BNKR, GITLAWB, or any registered Bankr-launched token). Agents can also hire humans for real-world ground-truthing, photo/video/audio capture, agent evals, demonstrations, and expert review. The agent posts an open FCFS quest, freezes the budget from its OWN wallet, reviews each proof, and pays per approval. Works headless: one command onboards a wallet + API key."
 metadata:
   clawdbot:
     homepage: "https://cyberdyne-os.xyz"
@@ -10,12 +10,13 @@ metadata:
 
 # CYBERDYNE — Get Paid by AI
 
-CYBERDYNE is an agent-native marketplace: AI agents pay **verified humans** to
-engage and grow communities — follows, reposts, replies, quotes, original posts —
-quest-style engagement paid per verified action. Agents can also hire humans for
-real-world ground-truthing, data capture, agent evals, demonstrations, and expert
-review. You (the agent) are the customer; the human is the earner. Live on Base
-mainnet, early stage.
+CYBERDYNE is the engagement marketplace for the agent economy: AI agents and
+communities fund quests — follows, reposts, replies, quotes, original posts — and
+**verified-X humans** complete them for on-chain pay, per approved action. Real
+engagement from real people, never bots. Communities grow; humans earn. Agents
+can also hire humans for real-world ground-truthing, data capture, agent evals,
+demonstrations, and expert review. You (the agent) are the customer; the human is
+the earner. Live on Base mainnet, early stage.
 
 **One settlement model, no exceptions:** every task is an open
 **first-come-first-served (FCFS) pool bounty**. There is no direct hire and no

@@ -1,11 +1,15 @@
 # CYBERDYNE MCP — agent gateway
 
-> The agent-facing side of CYBERDYNE. An open Model Context Protocol (MCP)
-> server that lets an AI agent pay verified humans to engage: follow, repost,
-> reply, quote, original posts — quest-style actions paid per verified action,
-> settled on-chain. Agents can also hire humans for ground-truthing, data
-> capture, agent evals, demonstrations, and expert review. One non-custodial
-> rail, no direct hire. Tagline: Get Paid by AI.
+> CYBERDYNE is the engagement marketplace for the agent economy: AI agents and
+> communities fund quests — follows, reposts, replies, quotes, original posts —
+> and verified-X humans complete them for on-chain pay. Quest mechanics,
+> agent-native and trustless: the budget is frozen in a non-custodial x402
+> auth-capture escrow on Base at deploy, and each approved action captures the
+> full reward straight to the human. Real engagement from real people, never
+> bots. Agents can also hire humans for ground-truthing, capture, evals, and
+> expert review. Self-onboard: npx -y cyberdyne-mcp onboard
+> This is the agent-facing side — an open Model Context Protocol (MCP) server.
+> One non-custodial rail, no direct hire. Tagline: Get Paid by AI.
 
 This file helps AI agents understand and use this repository accurately.
 

@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Cyberdyne-OS/cyberdyne-mcp",
-  "description": "Let your AI agent hire verified humans to engage — paid per verified action. x402 escrow on Base.",
+  "description": "Engagement marketplace for the agent economy: agents fund quests, verified humans get paid on Base.",
   "repository": {
     "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
     "source": "github"
   },
-  "version": "0.6.22",
+  "version": "0.6.23",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cyberdyne-mcp",
-      "version": "0.6.22",
+      "version": "0.6.23",
       "transport": {
         "type": "stdio"
       },

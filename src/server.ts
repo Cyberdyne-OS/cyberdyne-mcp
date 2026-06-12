@@ -223,7 +223,7 @@ const server = new McpServer({ name: "cyberdyne", version: PKG_VERSION });
 
 server.tool(
   "list_categories",
-  "List the kinds of work CYBERDYNE humans can do — engagement actions (follow, repost, reply, quote, original posts) plus ground-truthing, capture, agent evals, demos, and expert review. Static (no network). Use this to learn the valid `category` values before posting a task.",
+  "List the kinds of quests CYBERDYNE humans can complete — engagement quests (follow, repost, reply, quote, original posts) plus ground-truthing, capture, agent evals, demos, and expert review. Static (no network). Use this to learn the valid `category` values before posting a quest.",
   {},
   async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))),
 );
@@ -252,7 +252,7 @@ server.tool(
 
 server.tool(
   "post_task",
-  "Open an FCFS pool bounty on the marketplace. There is NO direct hire and NO agent-picks-human — every task is an open bounty: you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission. Funds are NOT charged at post — the budget is frozen later at authorize_task. `reward_usd` is the total budget; `quantity` is how many identical units (humans) it pays — each unit holds reward_usd/quantity (each unit must be >= $0.01). Returns the created task (with its id) plus `authIntent` (the budget authorization to sign) and `deployFee` { usd, bps, recipient, token } (a SEPARATE non-refundable fee tx) — pass BOTH to authorize_task. The non-custodial POOL escrow (USDC/BNKR/GITLAWB on Base) is the only settlement rail; a non-real token (CYOS) or non-live config has no rail and returns 422 settlement_unavailable.",
+  "Fund a quest on the engagement marketplace (an FCFS pool bounty). There is NO direct hire and NO agent-picks-human — every quest is an open bounty: you freeze a budget, ANY eligible verified-X human submits first-come-first-served, and you approve/reject each submission. Funds are NOT charged at post — the budget is frozen later at authorize_task. `reward_usd` is the total budget; `quantity` is how many identical units (humans) it pays — each unit holds reward_usd/quantity (each unit must be >= $0.01). Returns the created task (with its id) plus `authIntent` (the budget authorization to sign) and `deployFee` { usd, bps, recipient, token } (a SEPARATE non-refundable fee tx) — pass BOTH to authorize_task. The non-custodial POOL escrow (USDC/BNKR/GITLAWB on Base) is the only settlement rail; a non-real token (CYOS) or non-live config has no rail and returns 422 settlement_unavailable.",
   {
     title: z.string().min(2).max(160).describe("Short task title."),
     category: z.enum(TASK_CATEGORIES),
@@ -437,7 +437,7 @@ server.registerPrompt(
   "quickstart",
   {
     title: "CYBERDYNE quickstart",
-    description: "How to fund, post an FCFS pool bounty, and pay verified humans end-to-end.",
+    description: "How to fund a quest (FCFS pool bounty) and pay verified humans per approved action, end-to-end.",
   },
   () => ({
     messages: [
@@ -446,7 +446,7 @@ server.registerPrompt(
         content: {
           type: "text",
           text: [
-            "You are connected to CYBERDYNE — pay verified humans to engage (follow, repost, reply, quote, original posts), paid per verified action; humans also do ground-truthing, capture, agent evals, demos, and expert review. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
+            "You are connected to CYBERDYNE — the engagement marketplace for the agent economy. AI agents and communities fund quests (follow, repost, reply, quote, original posts) and verified-X humans complete them, paid per approved action; humans also do ground-truthing, capture, agent evals, demos, and expert review. There is ONE model: every quest is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). Real engagement from real people, never bots. The human submit-proof step is human-only, in the app; you drive everything else.",
             "",
             "FUND: hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial).",
             "",

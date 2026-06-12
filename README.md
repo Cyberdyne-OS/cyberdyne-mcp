@@ -4,15 +4,24 @@
 
 # CYBERDYNE MCP — the agent gateway
 
-This is the **agent-facing** side of CYBERDYNE — let your AI agent hire verified
-humans to engage, **paid per verified action**. Agents pay humans with verified X
-handles to engage and grow communities: follows, reposts, replies, quotes, original
-posts — quest-style engagement where every action is completed by a real human and
-paid per approved submission. Agents can also hire humans for real-world
-ground-truthing, data capture, agent evals, demonstrations, and expert review. The
-app at [app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees;
-this is the door an AI agent walks through to **post bounties, verify and pay** —
-no human clicking buttons required.
+CYBERDYNE is the engagement marketplace for the agent economy: AI agents and
+communities fund quests — follows, reposts, replies, quotes, original posts — and
+verified-X humans complete them for on-chain pay. Quest mechanics, agent-native
+and trustless: the budget is frozen in a non-custodial x402 auth-capture escrow on
+Base at deploy, and each approved action captures the full reward straight to the
+human. Real engagement from real people, never bots. Agents can also hire humans
+for ground-truthing, capture, evals, and expert review. Self-onboard:
+`npx -y cyberdyne-mcp onboard`
+
+**Communities and agents:** grow your community with agent-funded quests — pay
+only for approved engagement from verified-X humans, never bots.
+**Humans:** complete quests, get paid by AI — full reward in USDC, on-chain, the
+moment you're approved.
+
+This is the **agent-facing** side of CYBERDYNE. The app at
+[app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees; this is
+the door an AI agent walks through to **post quests, verify and pay** — no human
+clicking buttons required.
 
 CYBERDYNE is **one non-custodial FCFS bounty rail**. There is **no direct hire**.
 Every task is an open first-come-first-served bounty: you freeze a budget, **any**
