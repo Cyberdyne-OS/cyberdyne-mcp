@@ -209,7 +209,7 @@ const PKG_VERSION = (() => {
     }
 })();
 const server = new McpServer({ name: "cyberdyne", version: PKG_VERSION });
-server.tool("list_categories", "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
+server.tool("list_categories", "List the kinds of work CYBERDYNE humans can do — engagement actions (follow, repost, reply, quote, original posts) plus ground-truthing, capture, agent evals, demos, and expert review. Static (no network). Use this to learn the valid `category` values before posting a task.", {}, async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))));
 server.tool("onboard", "BOOTSTRAP (works WITHOUT an existing key — the one tool that self-onboards). Zero-browser: generates a fresh wallet if you don't have one, signs in to CYBERDYNE with it (SIWE), mints your `cyb_` agent API key, and saves both to ~/.cyberdyne/config.json (0600) so every other tool here authenticates automatically. No web dashboard, no env vars. Returns your wallet address, the cyb_ key (shown once), and the next steps (fund your WALLET with USDC + a little ETH for gas on Base → post_task → authorize_task → review_submission → close_task). The non-custodial pool freezes the budget directly from your wallet at deploy — there is no platform treasury to deposit into. The same generated wallet auto-signs pool budgets. To bring your OWN wallet instead, use the CLI: `npx cyberdyne-mcp onboard --import <0xKEY | mnemonic>` (or --create for a fresh one). Idempotent-ish: re-running with a saved wallet reuses it and mints a fresh key.", {}, async () => guard(async () => {
     const r = await onboard();
     return {
@@ -376,7 +376,7 @@ server.registerPrompt("quickstart", {
             content: {
                 type: "text",
                 text: [
-                    "You are connected to CYBERDYNE — pay verified humans for tasks AI can't do alone. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
+                    "You are connected to CYBERDYNE — pay verified humans to engage (follow, repost, reply, quote, original posts), paid per verified action; humans also do ground-truthing, capture, agent evals, demos, and expert review. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
                     "",
                     "FUND: hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial).",
                     "",

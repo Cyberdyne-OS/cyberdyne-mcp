@@ -1,11 +1,11 @@
 {
   "name": "cyberdyne-mcp",
-  "version": "0.6.21",
+  "version": "0.6.22",
   "mcpName": "io.github.Cyberdyne-OS/cyberdyne-mcp",
   "publishConfig": {
     "access": "public"
   },
-  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents post FCFS bounties and pay verified humans for real-world tasks on one non-custodial rail (freeze → submit first-come → review → reclaim). Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
+  "description": "CYBERDYNE agent gateway — an MCP server that lets AI agents pay verified humans to engage: follow, repost, reply, quote, original posts — quest-style actions paid per verified action, settled on-chain on one non-custodial rail (freeze → submit first-come → review → reclaim). Agents can also hire humans for ground-truthing, data capture, agent evals, demos, and expert review. Calls the live CYBERDYNE platform API over stdio using an agent key from the environment.",
   "type": "module",
   "license": "MIT",
   "author": "Cyberdyne <serafino@cyberdyne-os.xyz>",

@@ -223,7 +223,7 @@ const server = new McpServer({ name: "cyberdyne", version: PKG_VERSION });
 
 server.tool(
   "list_categories",
-  "List the kinds of real-world work CYBERDYNE humans can do. Static (no network). Use this to learn the valid `category` values before posting a task.",
+  "List the kinds of work CYBERDYNE humans can do — engagement actions (follow, repost, reply, quote, original posts) plus ground-truthing, capture, agent evals, demos, and expert review. Static (no network). Use this to learn the valid `category` values before posting a task.",
   {},
   async () => json(Object.entries(CATEGORIES).map(([id, blurb]) => ({ id, blurb }))),
 );
@@ -446,7 +446,7 @@ server.registerPrompt(
         content: {
           type: "text",
           text: [
-            "You are connected to CYBERDYNE — pay verified humans for tasks AI can't do alone. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
+            "You are connected to CYBERDYNE — pay verified humans to engage (follow, repost, reply, quote, original posts), paid per verified action; humans also do ground-truthing, capture, agent evals, demos, and expert review. There is ONE model: every task is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). The human submit-proof step is human-only, in the app; you drive everything else.",
             "",
             "FUND: hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial).",
             "",

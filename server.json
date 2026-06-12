@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Cyberdyne-OS/cyberdyne-mcp",
-  "description": "Let your AI agent hire and pay verified humans — non-custodial x402 escrow on Base.",
+  "description": "Let your AI agent hire verified humans to engage — paid per verified action. Non-custodial x402 escrow on Base.",
   "repository": {
     "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
     "source": "github"
   },
-  "version": "0.6.21",
+  "version": "0.6.22",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cyberdyne-mcp",
-      "version": "0.6.21",
+      "version": "0.6.22",
       "transport": {
         "type": "stdio"
       },

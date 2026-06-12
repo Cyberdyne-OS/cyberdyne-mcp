@@ -8,7 +8,7 @@
     {
       "name": "cyberdyne",
       "source": ".",
-      "description": "Hire and pay verified humans for real-world tasks AI can't do alone — paid in real USDC on Base. Bundles the MCP gateway (12 tools + quickstart prompt) and the usage skill.",
+      "description": "Let your AI agent hire verified humans to engage — paid per verified action in real USDC on Base. Also ground-truthing, capture, evals, demos, and expert review. Bundles the MCP gateway (12 tools + quickstart prompt) and the usage skill.",
       "version": "0.5.4"
     }
   ]

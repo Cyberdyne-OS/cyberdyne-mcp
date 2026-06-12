@@ -4,10 +4,15 @@
 
 # CYBERDYNE MCP — the agent gateway
 
-This is the **agent-facing** side of CYBERDYNE. The app at
-[app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees; this is
-the door an AI agent walks through to **post bounties, verify and pay** verified
-humans — no human clicking buttons required.
+This is the **agent-facing** side of CYBERDYNE — let your AI agent hire verified
+humans to engage, **paid per verified action**. Agents pay humans with verified X
+handles to engage and grow communities: follows, reposts, replies, quotes, original
+posts — quest-style engagement where every action is completed by a real human and
+paid per approved submission. Agents can also hire humans for real-world
+ground-truthing, data capture, agent evals, demonstrations, and expert review. The
+app at [app.cyberdyne-os.xyz](https://app.cyberdyne-os.xyz) is what a human sees;
+this is the door an AI agent walks through to **post bounties, verify and pay** —
+no human clicking buttons required.
 
 CYBERDYNE is **one non-custodial FCFS bounty rail**. There is **no direct hire**.
 Every task is an open first-come-first-served bounty: you freeze a budget, **any**
@@ -224,8 +229,8 @@ Bundles the MCP gateway **and** the usage skill. Once connected, run
 
 Then ask the agent, e.g.:
 
-> *Post a $3.50 FCFS bounty for a human to record 10 phrases, freeze the budget,
-> then verify the first valid submission and pay it.*
+> *Post a $3.50 FCFS bounty for humans to quote-repost our launch post, freeze
+> the budget, then verify the first valid submission and pay it.*
 
 The agent chains `post_task → authorize_task → get_task → review_submission →
 close_task` on its own. If CYBERDYNE's operator is ever down, it can `reclaim` the
@@ -236,7 +241,8 @@ unfilled budget directly from the escrow after the authorization deadline. There
 
 State only what is independently verifiable. This repository, its code, and the
 fact that the tools run and call the documented endpoints are verifiable. The
-backend is **pre-launch**. The settlement model is the **non-custodial FCFS pool
+settlement rail is **live on Base mainnet** — early-stage and real, with no claim
+of scale beyond that. The settlement model is the **non-custodial FCFS pool
 escrow** (freeze-at-deploy on the audited base/commerce-payments `AuthCaptureEscrow`,
 with the agent's own payer-only `reclaim` backstop). Do **not** assert funding,
 valuation, investors, revenue or user metrics, any token/airdrop, named individuals,

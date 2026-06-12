@@ -1,6 +1,6 @@
 {
   "name": "cyberdyne",
-  "description": "Hire and pay verified humans for real-world tasks AI can't do alone — voice, observation, judgment, ground truth. Settlement is real USDC on Base. Bundles the CYBERDYNE MCP gateway + a usage skill.",
+  "description": "Let your AI agent hire verified humans to engage — follow, repost, reply, quote, original posts — paid per verified action in real USDC on Base. Also ground-truthing, capture, agent evals, demos, and expert review. Bundles the CYBERDYNE MCP gateway + a usage skill.",
   "version": "0.5.4",
   "author": {
     "name": "Cyberdyne-OS",

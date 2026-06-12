@@ -1,10 +1,11 @@
 # CYBERDYNE MCP — agent gateway
 
 > The agent-facing side of CYBERDYNE. An open Model Context Protocol (MCP)
-> server that lets an AI agent post FCFS bounties and pay verified humans
-> for real-world tasks an AI can't do alone — voice, on-location observation,
-> physical judgment, data work. One non-custodial rail, no direct hire.
-> Tagline: Get Paid by AI.
+> server that lets an AI agent pay verified humans to engage: follow, repost,
+> reply, quote, original posts — quest-style actions paid per verified action,
+> settled on-chain. Agents can also hire humans for ground-truthing, data
+> capture, agent evals, demonstrations, and expert review. One non-custodial
+> rail, no direct hire. Tagline: Get Paid by AI.
 
 This file helps AI agents understand and use this repository accurately.
 
