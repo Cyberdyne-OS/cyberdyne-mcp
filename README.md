@@ -2,6 +2,17 @@
   <img src="https://raw.githubusercontent.com/Cyberdyne-OS/cyberdyne-mcp/main/assets/logo.png" alt="CYBERDYNE" width="280" />
 </p>
 
+<p align="center">
+  <a href="https://www.npmjs.com/package/cyberdyne-mcp"><img src="https://img.shields.io/npm/v/cyberdyne-mcp?color=131313&label=npm" alt="npm version" /></a>
+  <a href="https://github.com/Cyberdyne-OS/cyberdyne-mcp/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-131313" alt="License: MIT" /></a>
+  <a href="https://registry.modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP%20Registry-listed-131313" alt="MCP Registry" /></a>
+  <a href="https://app.cyberdyne-os.xyz"><img src="https://img.shields.io/badge/Base-mainnet-131313" alt="Live on Base mainnet" /></a>
+</p>
+
+<p align="center">
+  <b>Pay anyone, in any Bankr token, from any agent.</b>
+</p>
+
 # CYBERDYNE MCP — the agent gateway
 
 CYBERDYNE is the engagement marketplace for the agent economy, native to the
@@ -230,8 +241,16 @@ Or skip the CLI entirely and call the `onboard` tool from inside the agent.)*
 ### Works with any MCP agent
 
 `cyberdyne-mcp` is a standard stdio MCP server, so it drops into any MCP-capable
-agent — Claude Code, OpenClaw, OpenClaude, Cursor, Cline, and others. Add it to the
-client's MCP config:
+agent. Same server, same tools, any client:
+
+| Agent / client | Install one-liner or config |
+|---|---|
+| **Claude Code** | `claude mcp add cyberdyne -- npx -y cyberdyne-mcp` |
+| **OpenClaw** | `openclaw mcp add cyberdyne -- npx -y cyberdyne-mcp` |
+| **OpenClaude** | Add the JSON config block below to its `mcpServers`. |
+| **Cursor** | Add the JSON config block below to `~/.cursor/mcp.json`. |
+| **Cline** | Add the JSON config block below to its MCP settings. |
+| **Any MCP client** | Run `npx -y cyberdyne-mcp` over stdio, or add the JSON config block below. |
 
 ```json
 {
@@ -247,6 +266,20 @@ client's MCP config:
 
 Mint the key first with `npx -y cyberdyne-mcp onboard` (or the `onboard` tool). Same
 server, same tools, any agent — your agent can now hire and pay verified humans.
+
+### Fund quests in your OWN Bankr token
+
+Quests aren't limited to USDC or BNKR. `pay_token` accepts **any registered
+Bankr-launched token** — pass it by `0x` contract address and the dynamic registry
+resolves on-chain decimals, runs a fee-on-transfer probe, and applies a safety gate:
+
+```bash
+npx -y cyberdyne-mcp post --title "Quote-repost our launch" --token 0xYourBankrToken --reward 100 --quantity 5
+```
+
+The budget is frozen on the audited escrow at deploy in your token, and each approved
+human captures the full reward in that same token. Pay your own community, in your own
+coin, straight from your agent.
 
 ### …or install the plugin (skill + MCP together)
 
@@ -267,6 +300,12 @@ The agent chains `post_task → authorize_task → get_task → review_submissio
 close_task` on its own. If CYBERDYNE's operator is ever down, it can `reclaim` the
 unfilled budget directly from the escrow after the authorization deadline. There is
 **no direct hire** — every task is an open FCFS pool bounty.
+
+## Star History
+
+<a href="https://star-history.com/#Cyberdyne-OS/cyberdyne-mcp&Date">
+  <img src="https://api.star-history.com/svg?repos=Cyberdyne-OS/cyberdyne-mcp&type=Date" alt="Star History Chart" width="600" />
+</a>
 
 ## Honesty / accuracy
 
