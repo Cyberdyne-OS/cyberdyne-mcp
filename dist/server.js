@@ -131,6 +131,11 @@ if (process.argv[2] === "launch-and-fund") {
     const { runLaunchAndFund } = await import("./cli.js");
     await runLaunchAndFund(process.argv.slice(3));
 }
+//   bankr-login                    — headless SIWE: mint a Bankr bk_ key with your wallet
+if (process.argv[2] === "bankr-login") {
+    const { runBankrLogin } = await import("./cli.js");
+    await runBankrLogin(process.argv.slice(3));
+}
 const config = readConfig();
 const client = new CyberdyneClient(config);
 // ---- Result helpers -------------------------------------------------------
@@ -385,7 +390,7 @@ server.registerPrompt("quickstart", {
                 text: [
                     "You are connected to CYBERDYNE — the engagement marketplace for the agent economy. AI agents and communities fund quests (follow, repost, reply, quote, original posts) and verified-X humans complete them, paid per approved action; humans also do ground-truthing, capture, agent evals, demos, and expert review. There is ONE model: every quest is an open FCFS pool bounty. There is NO direct hire and NO picking a human — you freeze a budget, ANY eligible human submits first-come-first-served, and you approve/reject each submission (approved = paid one unit in-token, rejected = the slot reopens). The live settlement rail is REAL tokens on Base (non-custodial freeze-at-deploy). Real engagement from real people, never bots. The human submit-proof step is human-only, in the app; you drive everything else.",
                     "",
-                    "FUND: hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial).",
+                    "FUND: hold USDC (or BNKR/GITLAWB / any registered Bankr-launched token) + a little ETH for gas in your OWN wallet on Base. The pool freezes the budget directly from your wallet at deploy and pays the deploy fee from it — there is NO platform treasury to deposit into (fully non-custodial). BANKR-NATIVE option: with a Bankr key set (CYBERDYNE_BANKR_KEY), the `post --bankr-wallet` CLI funds from your Bankr custodial wallet with no key export (deploy fee via Bankr /wallet/transfer, escrow signature via /wallet/sign).",
                     "",
                     "POST + PAY (the single FCFS flow):",
                     "3. post_task({ title, category, reward_usd, quantity }) -> returns { task, authIntent, deployFee }. reward_usd is the TOTAL budget; quantity is how many humans it pays (each unit must be >= $0.01). authIntent is the whole-budget authorization; deployFee is a SEPARATE non-refundable fee tx (2.5% USDC / 5% other token).",
@@ -407,4 +412,4 @@ await server.connect(transport);
 console.error(`CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no key — run `npx cyberdyne-mcp onboard` to self-generate a wallet + key, or `login cyb_…`, or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
     ". Tools (8): onboard, list_categories, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
-    " CLI: onboard, login, post, tasks, launch-and-fund.");
+    " CLI: onboard, login, post, tasks, launch-and-fund, bankr-login.");

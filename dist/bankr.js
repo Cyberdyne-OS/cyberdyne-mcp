@@ -21,6 +21,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { readSavedWalletKey } from "./client.js";
 export const BANKR_API_URL = "https://api.bankr.bot";
 /**
  * Resolve the agent's Bankr `bk_` key, most-explicit first:
@@ -172,4 +173,87 @@ export async function bankrSearchTokens(query, chainId) {
     if (!res.ok)
         throw new BankrApiError(res.status, "/tokens/search", "search failed");
     return Array.isArray(json) ? json : (json.tokens ?? []);
+}
+/** GET /wallet/portfolio — multi-chain balances/holdings (cheap treasury/earnings view). */
+export async function bankrPortfolio(opts = {}, key) {
+    const q = new URLSearchParams();
+    if (opts.chains?.length)
+        q.set("chains", opts.chains.join(","));
+    if (opts.showLowValueTokens)
+        q.set("showLowValueTokens", "true");
+    const qs = q.toString();
+    return call("GET", `/wallet/portfolio${qs ? `?${qs}` : ""}`, { key });
+}
+/**
+ * POST /wallet/x402-pay — pay any x402-priced URL custodially from the Bankr wallet,
+ * Bankr handling the 402 handshake server-side, capped by `maxPaymentUsd`. Useful for an
+ * agent to call a paid discovery/quote endpoint (e.g. CYBERDYNE's x402 Cloud front door)
+ * with one authenticated POST instead of a client-side wallet signature.
+ */
+export async function bankrX402Pay(params, key) {
+    return call("POST", "/wallet/x402-pay", {
+        key,
+        body: { url: params.url, method: params.method ?? "GET", body: params.body, maxPaymentUsd: params.maxPaymentUsd },
+    });
+}
+/**
+ * Headless `bankr login --siwe`: mint a `bk_` key by signing a SIWE message with the
+ * agent's own wallet — zero-browser, no email OTP. Flow (verified against @bankr/cli):
+ *   GET /cli/siwe/nonce → build the SIWE message → personal_sign → POST /cli/siwe/verify.
+ * Mints with Wallet API enabled (so /wallet/* works); Agent API + Token-Launch API stay
+ * OFF (Agent API is separately gated at bankr.bot/api; we never launch tokens). The
+ * private key never leaves this process and is never logged. Defaults the signer to the
+ * onboarded wallet (CYBERDYNE_EVM_PRIVATE_KEY / ~/.cyberdyne config).
+ */
+export async function bankrSiweProvision(opts = {}) {
+    const pk = (opts.privateKey ?? process.env.CYBERDYNE_EVM_PRIVATE_KEY?.trim() ?? readSavedWalletKey() ?? "").trim();
+    if (!pk) {
+        throw new Error("no signing wallet — pass a private key, set CYBERDYNE_EVM_PRIVATE_KEY, or run `cyberdyne-mcp onboard` first");
+    }
+    const { privateKeyToAccount } = await import("viem/accounts");
+    const account = privateKeyToAccount((pk.startsWith("0x") ? pk : `0x${pk}`));
+    const host = new URL(BANKR_API_URL).host;
+    const nonceRes = await fetch(`${BANKR_API_URL}/cli/siwe/nonce`, {
+        headers: { accept: "application/json", "user-agent": "cyberdyne-mcp" },
+        signal: AbortSignal.timeout(20_000),
+    });
+    if (!nonceRes.ok)
+        throw new BankrApiError(nonceRes.status, "/cli/siwe/nonce", "nonce request failed");
+    const { nonce } = (await nonceRes.json());
+    if (!nonce)
+        throw new BankrApiError(200, "/cli/siwe/nonce", "no nonce in response");
+    const message = [
+        `${host} wants you to sign in with your Ethereum account:`,
+        account.address,
+        "",
+        "Sign in to Bankr",
+        "",
+        `URI: ${BANKR_API_URL}/cli/siwe/verify`,
+        "Version: 1",
+        "Chain ID: 1",
+        `Nonce: ${nonce}`,
+        `Issued At: ${new Date().toISOString()}`,
+    ].join("\n");
+    const signature = await account.signMessage({ message });
+    const verifyRes = await fetch(`${BANKR_API_URL}/cli/siwe/verify`, {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json", "user-agent": "cyberdyne-mcp" },
+        body: JSON.stringify({
+            message,
+            signature,
+            partnerApiKey: opts.partnerKey ?? process.env.CYBERDYNE_BANKR_PARTNER_KEY?.trim(),
+            keyName: opts.keyName ?? `cyberdyne-${new Date().toISOString().slice(0, 10)}`,
+            readOnly: false,
+            walletApiEnabled: opts.walletApiEnabled ?? true,
+            agentApiEnabled: false,
+            tokenLaunchApiEnabled: false,
+            allowedRecipients: opts.allowedRecipients,
+        }),
+        signal: AbortSignal.timeout(30_000),
+    });
+    const j = (await verifyRes.json().catch(() => ({})));
+    if (!verifyRes.ok || !j.apiKey) {
+        throw new BankrApiError(verifyRes.status, "/cli/siwe/verify", String(j.message ?? j.error ?? "verify failed"));
+    }
+    return { apiKey: j.apiKey, walletAddress: j.walletAddress ?? account.address, readOnly: j.readOnly };
 }

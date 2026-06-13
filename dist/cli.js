@@ -235,3 +235,34 @@ export async function runTasks() {
         fail(describe(e));
     }
 }
+// ── bankr-login (headless SIWE → mint a bk_ key) ─────────────────────────────
+// Zero-browser, no email OTP: sign a SIWE message with your onboarded wallet to mint a
+// Bankr `bk_` key (Wallet API enabled), so `post --bankr-wallet` can fund from your Bankr
+// custodial wallet. The key is printed ONCE to stderr (never stored by CYBERDYNE) — set it
+// as CYBERDYNE_BANKR_KEY / BANKR_API_KEY. Agent API access (the /agent/* surface) may still
+// need enabling at bankr.bot/api; Wallet API (/wallet/*) is on by default.
+//   --private-key <0x…>   signer (defaults to the onboarded wallet / CYBERDYNE_EVM_PRIVATE_KEY)
+//   --partner-key <key>   optional X-Partner-Key fee attribution
+//   --key-name <name>     optional label for the minted key
+export async function runBankrLogin(argv) {
+    const f = parseFlags(argv);
+    try {
+        const { bankrSiweProvision } = await import("./bankr.js");
+        console.error("→ minting a Bankr key via headless SIWE (signing with your wallet)…");
+        const r = await bankrSiweProvision({
+            privateKey: isFlagSet(f["private-key"]) ? f["private-key"] : undefined,
+            partnerKey: isFlagSet(f["partner-key"]) ? f["partner-key"] : undefined,
+            keyName: isFlagSet(f["key-name"]) ? f["key-name"] : undefined,
+        });
+        console.error(`✓ Bankr key minted for wallet ${r.walletAddress}${r.readOnly ? " (read-only)" : ""}.\n` +
+            `\n  bk_ key : ${r.apiKey}    ← shown once; CYBERDYNE does NOT store it\n` +
+            "\nSet it so `post --bankr-wallet` / launch-and-fund can use it:\n" +
+            `  export CYBERDYNE_BANKR_KEY=${r.apiKey}\n` +
+            "\nNote: Wallet API (/wallet/*) is enabled by default. If /wallet/* calls 401/403, enable\n" +
+            "Agent/Wallet API access for this key at https://bankr.bot/api (may require Bankr Club).");
+        process.exit(0);
+    }
+    catch (e) {
+        fail(describe(e));
+    }
+}
