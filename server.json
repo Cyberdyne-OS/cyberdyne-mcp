@@ -6,12 +6,12 @@
     "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
     "source": "github"
   },
-  "version": "0.6.25",
+  "version": "0.7.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cyberdyne-mcp",
-      "version": "0.6.25",
+      "version": "0.7.0",
       "transport": {
         "type": "stdio"
       },
@@ -26,6 +26,13 @@
         {
           "name": "CYBERDYNE_EVM_PRIVATE_KEY",
           "description": "Private key of the agent wallet used to sign on-chain deploy/fee txs on Base (an external signer is also supported). Provisioned by `onboard`; set only for headless/advanced use.",
+          "isRequired": false,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "CYBERDYNE_BANKR_KEY",
+          "description": "Optional bk_ Bankr Agent-API key. Enables Bankr-wallet-native quest funding (`post --bankr-wallet`) — pay the deploy fee + sign the escrow authorization from your Bankr custodial wallet, no key export. Falls back to BANKR_API_KEY / ~/.bankr/config.json. Used directly against api.bankr.bot; never stored by CYBERDYNE.",
           "isRequired": false,
           "isSecret": true,
           "format": "string"

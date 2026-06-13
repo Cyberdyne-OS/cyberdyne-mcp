@@ -39,6 +39,11 @@ export function parseFlags(argv: string[]): Record<string, string> {
   return out;
 }
 
+/** A flag is "set" when present and not explicitly disabled (bare `--flag` ⇒ "true"). */
+function isFlagSet(v: string | undefined): boolean {
+  return v != null && v !== "false" && v !== "0";
+}
+
 function client(): CyberdyneClient {
   return new CyberdyneClient(readConfig());
 }
@@ -48,12 +53,6 @@ function hasKey(): boolean {
 }
 
 const NO_KEY = "No CYBERDYNE key saved. Run:  npx -y cyberdyne-mcp onboard";
-
-/** Format a USD-ish numeric value (handles string/number/null) to 2dp. */
-function usd(v: unknown): string {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? `$${n.toFixed(2)}` : "—";
-}
 
 function fail(msg: string): never {
   console.error(`✗ ${msg}`);
@@ -141,28 +140,54 @@ export async function runPost(argv: string[]): Promise<void> {
       process.exit(0);
     }
 
-    // POOL rail — the autonomous `bankr launch` path. Sign the budget with the saved
-    // wallet, pay the separate deploy fee, then authorize. Reuses evm-signer (the
-    // exact logic the authorize_task MCP tool uses).
-    const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
-    if (!hasEvmKey()) {
-      fail(
-        "pool rail needs a signing wallet, but none is saved. Run `npx -y cyberdyne-mcp onboard` " +
-          `(the task ${taskId} is posted but not yet funded).`,
-      );
-    }
+    // POOL rail — the autonomous `bankr launch` path. Sign the budget, pay the separate
+    // deploy fee, then authorize. Two signers:
+    //   default      — the saved/local wallet (evm-signer.ts, the certified path).
+    //   --bankr-wallet (or env CYBERDYNE_SIGNER=bankr / CYBERDYNE_BANKR_WALLET=1) — fund
+    //     from the agent's Bankr custodial wallet, no key export (bankr-signer.ts, BETA).
+    const bankrMode =
+      isFlagSet(f["bankr-wallet"]) ||
+      /^(1|true|bankr)$/i.test(process.env.CYBERDYNE_SIGNER ?? "") ||
+      process.env.CYBERDYNE_BANKR_WALLET === "1";
 
     const requirements =
       (res.authIntent as { requirements?: unknown }).requirements ?? res.authIntent;
-    console.error("→ signing the budget authorization…");
-    const signedPayment = await signAuthCapture(requirements);
-
     const fee = res.deployFee;
     // `fee.amount` is in the FEE TOKEN's own units; for non-USDC tokens `fee.usd` is the
     // token amount (no oracle), so DON'T render it as a "$" — just show the token amount.
-    console.error(`→ paying the deploy fee (${fee.amount} of ${String(fee.token).slice(0, 10)}…) from your wallet…`);
-    const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
-    console.error(`  ✓ fee paid — ${feeTx}`);
+    const feeLabel = `${fee.amount} of ${String(fee.token).slice(0, 10)}…`;
+
+    let signedPayment: string;
+    let feeTx: string;
+    if (bankrMode) {
+      const { hasBankrSigner, bankrSignAuthCapture, bankrPayDeployFee, bankrSignerAddress } = await import("./bankr-signer.js");
+      if (!hasBankrSigner()) {
+        fail(
+          "--bankr-wallet needs a Bankr key. Set CYBERDYNE_BANKR_KEY or BANKR_API_KEY (a bk_… Agent " +
+            `API key), or put it in ~/.bankr/config.json (the task ${taskId} is posted but not yet funded).`,
+        );
+      }
+      const addr = await bankrSignerAddress();
+      console.error(`→ funding from your Bankr wallet ${addr} (no key export)…`);
+      console.error("→ signing the budget authorization via Bankr (/wallet/sign)…");
+      signedPayment = await bankrSignAuthCapture(requirements);
+      console.error(`→ paying the deploy fee (${feeLabel}) via Bankr (/wallet/transfer)…`);
+      feeTx = await bankrPayDeployFee({ amount: fee.amount, recipient: fee.recipient, token: fee.token });
+      console.error(`  ✓ fee paid — ${feeTx}`);
+    } else {
+      const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
+      if (!hasEvmKey()) {
+        fail(
+          "pool rail needs a signing wallet, but none is saved. Run `npx -y cyberdyne-mcp onboard` " +
+            `(the task ${taskId} is posted but not yet funded). Or fund from your Bankr wallet with --bankr-wallet.`,
+        );
+      }
+      console.error("→ signing the budget authorization…");
+      signedPayment = await signAuthCapture(requirements);
+      console.error(`→ paying the deploy fee (${feeLabel}) from your wallet…`);
+      feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
+      console.error(`  ✓ fee paid — ${feeTx}`);
+    }
 
     console.error("→ freezing the budget (authorize)…");
     const authed = await c.rest<{ task?: { escrow_status?: string } }>(
@@ -179,6 +204,29 @@ export async function runPost(argv: string[]): Promise<void> {
   } catch (e) {
     fail(describe(e));
   }
+}
+
+// ── launch-and-fund (community loop) ─────────────────────────────────────────
+// Orchestrate the Bankr launch → grow loop: fund an engagement quest IN your own
+// Bankr-launched community token, paid to verified humans. CYBERDYNE NEVER launches a
+// token — you launch yours on Bankr first (e.g. Clanker via the Bankr app/agent), then
+// pass its contract address here. Funds from your Bankr wallet by default (no key export);
+// otherwise identical to `post`. Reuses runPost end-to-end.
+export async function runLaunchAndFund(argv: string[]): Promise<void> {
+  const f = parseFlags(argv);
+  const tok = (f.token ?? "").trim();
+  if (!tok) {
+    fail(
+      "launch-and-fund needs --token <0xADDRESS | SYMBOL> — the Bankr-launched token to fund the quest in.\n" +
+        "  Launch your community token on Bankr first (e.g. Clanker via the Bankr app/agent), then pass its\n" +
+        "  contract address here. CYBERDYNE never launches a token; it orchestrates funding quests in YOURS.",
+    );
+  }
+  console.error("launch-and-fund — funding an engagement quest in your Bankr-launched token, paid to verified humans.");
+  console.error("  (CYBERDYNE does not launch tokens. Launch yours on Bankr first; this funds quests in it.)");
+  // Default to the Bankr-wallet signer (no key export); honor an explicit --bankr-wallet=false.
+  const next = "bankr-wallet" in f ? argv : [...argv, "--bankr-wallet"];
+  await runPost(next);
 }
 
 // ── tasks ─────────────────────────────────────────────────────────────────
@@ -211,6 +259,39 @@ export async function runTasks(): Promise<void> {
       );
     }
     console.error(lines.join("\n"));
+    process.exit(0);
+  } catch (e) {
+    fail(describe(e));
+  }
+}
+
+// ── bankr-login (headless SIWE → mint a bk_ key) ─────────────────────────────
+// Zero-browser, no email OTP: sign a SIWE message with your onboarded wallet to mint a
+// Bankr `bk_` key (Wallet API enabled), so `post --bankr-wallet` can fund from your Bankr
+// custodial wallet. The key is printed ONCE to stderr (never stored by CYBERDYNE) — set it
+// as CYBERDYNE_BANKR_KEY / BANKR_API_KEY. Agent API access (the /agent/* surface) may still
+// need enabling at bankr.bot/api; Wallet API (/wallet/*) is on by default.
+//   --private-key <0x…>   signer (defaults to the onboarded wallet / CYBERDYNE_EVM_PRIVATE_KEY)
+//   --partner-key <key>   optional X-Partner-Key fee attribution
+//   --key-name <name>     optional label for the minted key
+export async function runBankrLogin(argv: string[]): Promise<void> {
+  const f = parseFlags(argv);
+  try {
+    const { bankrSiweProvision } = await import("./bankr.js");
+    console.error("→ minting a Bankr key via headless SIWE (signing with your wallet)…");
+    const r = await bankrSiweProvision({
+      privateKey: isFlagSet(f["private-key"]) ? f["private-key"] : undefined,
+      partnerKey: isFlagSet(f["partner-key"]) ? f["partner-key"] : undefined,
+      keyName: isFlagSet(f["key-name"]) ? f["key-name"] : undefined,
+    });
+    console.error(
+      `✓ Bankr key minted for wallet ${r.walletAddress}${r.readOnly ? " (read-only)" : ""}.\n` +
+        `\n  bk_ key : ${r.apiKey}    ← shown once; CYBERDYNE does NOT store it\n` +
+        "\nSet it so `post --bankr-wallet` / launch-and-fund can use it:\n" +
+        `  export CYBERDYNE_BANKR_KEY=${r.apiKey}\n` +
+        "\nNote: Wallet API (/wallet/*) is enabled by default. If /wallet/* calls 401/403, enable\n" +
+        "Agent/Wallet API access for this key at https://bankr.bot/api (may require Bankr Club).",
+    );
     process.exit(0);
   } catch (e) {
     fail(describe(e));

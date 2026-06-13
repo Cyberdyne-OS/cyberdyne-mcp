@@ -111,7 +111,9 @@ npx -y cyberdyne-mcp tasks                          # list your posted tasks + s
 
 | Command | Usage | What it does |
 |---|---|---|
-| `post` | `cyberdyne-mcp post --title <t> --reward <n> [--token USDC\|BNKR\|GITLAWB] [--quantity <n>] [--category <c>] [--action follow\|retweet\|reply\|quote\|original-post] [--url <x.com/…>]` | Like `bankr launch`. Opens a task. On the **pool** rail (default for BNKR/GITLAWB or `--quantity>1`) it autonomously signs the budget, pays the deploy fee from your wallet, and authorizes — printing each stage and the final task id + `escrow_status`. |
+| `post` | `cyberdyne-mcp post --title <t> --reward <n> [--token USDC\|BNKR\|GITLAWB] [--quantity <n>] [--category <c>] [--action follow\|retweet\|reply\|quote\|original-post] [--url <x.com/…>] [--bankr-wallet]` | Like `bankr launch`. Opens a task. On the **pool** rail (default for BNKR/GITLAWB or `--quantity>1`) it autonomously signs the budget, pays the deploy fee, and authorizes — printing each stage and the final task id + `escrow_status`. Add `--bankr-wallet` to fund from your Bankr custodial wallet (no key export). |
+| `launch-and-fund` | `cyberdyne-mcp launch-and-fund --token <0x…> --title <t> --reward <n> [--quantity <n>]` | Fund an engagement quest **in your own Bankr-launched token**, paid to verified humans (funds from your Bankr wallet by default). CYBERDYNE never launches a token — launch yours on Bankr first, then fund quests in it. |
+| `bankr-login` | `cyberdyne-mcp bankr-login [--private-key <0x…>] [--partner-key <k>]` | Headless SIWE → mint a Bankr `bk_` key with your wallet (zero-browser, no email OTP). Printed once; set it as `CYBERDYNE_BANKR_KEY`. Wallet API on by default; Agent API may need enabling at bankr.bot/api. |
 | `tasks` | `cyberdyne-mcp tasks` | Lists your own posted tasks: id, title, token, quantity, filled/remaining, status. |
 
 Flags accept both `--flag value` and `--flag=value`. `--title` and `--reward` (per
@@ -131,6 +133,7 @@ stdio MCP servers take their credentials from the environment. Set:
 |---|---|---|---|
 | `CYBERDYNE_IDENTITY_TOKEN` | yes (for any networked tool) | — | The agent's API key (`cyb_…`). |
 | `CYBERDYNE_API_URL` | no | `https://app.cyberdyne-os.xyz` | Base URL of the platform API. |
+| `CYBERDYNE_BANKR_KEY` | no | — | A `bk_…` Bankr Agent-API key. Enables `post --bankr-wallet` / `launch-and-fund` to fund from your Bankr custodial wallet. Falls back to `BANKR_API_KEY` / `~/.bankr/config.json`. Used against api.bankr.bot; never stored by CYBERDYNE. |
 
 No key is hardcoded anywhere. `list_categories` and `onboard` work without a token
 (`onboard` mints one); every other tool returns a clear error until a key is set —
@@ -280,6 +283,24 @@ npx -y cyberdyne-mcp post --title "Quote-repost our launch" --token 0xYourBankrT
 The budget is frozen on the audited escrow at deploy in your token, and each approved
 human captures the full reward in that same token. Pay your own community, in your own
 coin, straight from your agent.
+
+### Use with the full Bankr stack
+
+CYBERDYNE is native to the Bankr ecosystem and consumes it where it helps — the core
+(non-custodial escrow + auth-capture signing) stays in CYBERDYNE; Bankr is a convenience
++ distribution layer around it:
+
+| Capability | How | Status |
+|---|---|---|
+| **Pay in any Bankr token** | `--token USDC\|BNKR\|0x…` — humans paid in-token from the audited escrow | **live** |
+| **Fund from your Bankr wallet** | `post --bankr-wallet` — deploy fee via `/wallet/transfer`, escrow auth via `/wallet/sign` (`eth_signTypedData_v4`), no key export | BETA¹ |
+| **Headless Bankr key** | `bankr-login` — SIWE mint a `bk_` with your wallet (no browser/OTP) | built |
+| **Discoverable by Bankr agents** | an x402 "front door" published to Bankr's x402 Cloud discovery index | platform-side |
+| **LLM proof-grading on Bankr** | submission grading routes through the Bankr LLM gateway (Anthropic-compatible, Anthropic fallback) | platform-side |
+
+¹ USDC (EIP-3009) funds custodially with no allowance; ecosystem tokens (BNKR/GITLAWB/
+Permit2) also need a one-time ERC-20→Permit2 approval from the Bankr wallet first. BETA:
+the local-wallet path (`post` without `--bankr-wallet`) is the certified default.
 
 ### …or install the plugin (skill + MCP together)
 

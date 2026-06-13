@@ -39,6 +39,30 @@ npx -y cyberdyne-mcp onboard && npx -y cyberdyne-mcp post --title "Founder liven
 
 It posts a `$PEPE2` founder liveness check, freezes the budget on-chain, collects the proof (FCFS), and captures the payment to the human — printing the on-chain settlement.
 
+## Integration surface — what's built (consumes the Bankr stack)
+
+CYBERDYNE is native to the Bankr ecosystem. The core (non-custodial escrow + auth-capture
+signing in `@x402/evm`) never leaves CYBERDYNE; Bankr is a convenience + distribution layer
+around it. Built today:
+
+- **Pay-in-any-Bankr-token** — fund quests in USDC, BNKR, or any registered Bankr-launched
+  token (by `0x` address); humans paid in-token from the audited escrow. *(live)*
+- **Fund from your Bankr wallet** — `post --bankr-wallet`: deploy fee via Bankr
+  `/wallet/transfer`, escrow authorization via `/wallet/sign` (`eth_signTypedData_v4`),
+  no private-key export. The auth-capture payload is built by the same `@x402/evm` scheme;
+  only the signer differs. *(BETA — USDC works directly; Permit2 tokens need a one-time
+  approval from the Bankr wallet)*
+- **Headless Bankr key** — `bankr-login` mints a `bk_` via SIWE with the agent's wallet.
+- **Launch → grow loop** — `launch-and-fund` funds engagement quests in *your own*
+  Bankr-launched token. CYBERDYNE never launches a token.
+- **Discoverability** — an x402 "front door" published to Bankr's x402 Cloud discovery
+  index so Bankr-ecosystem agents can find CYBERDYNE *(platform-side)*.
+- **LLM proof-grading on the Bankr gateway** — Anthropic-compatible, with Anthropic
+  fallback *(platform-side)*.
+
+All endpoint shapes are verified against the published `@bankr/cli`; CYBERDYNE uses
+`@bankr/cli`'s REST API (`api.bankr.bot`), not the alpha `@bankr/sdk`.
+
 ## The pitch
 
 - **For Bankr:** turn "autonomous and exposed" into "autonomous **with a human safety layer**." A cheap human go/no-go before a risky buy is far cheaper than a rug. Optional, on-demand, pay-per-check.

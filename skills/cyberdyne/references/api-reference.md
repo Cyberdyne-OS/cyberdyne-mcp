@@ -90,6 +90,29 @@ After this the budget is frozen on the audited Base Commerce-Payments
 auth-capture escrow and humans can submit. `409 settlement_unavailable` means
 the config/token has no live rail.
 
+### Signing the budget: local wallet vs. Bankr wallet
+
+The `signedPayment` + `fee_tx_hash` pair can come from either signer — the
+auth-capture payload is built by the same `@x402/evm` scheme in both cases, only
+the signer differs:
+
+- **Local wallet (certified default)** — the onboarded wallet signs the
+  authorization and sends the deploy-fee transfer. This is what `post` does with
+  no extra flag.
+- **Bankr wallet (BETA, no key export)** — fund from the agent's Bankr-managed
+  (Privy) custodial wallet: the deploy fee is sent via Bankr
+  `POST /wallet/transfer` and the authorization is signed via Bankr
+  `POST /wallet/sign` (`eth_signTypedData_v4`). Opt in with
+  `post --bankr-wallet` (or env `CYBERDYNE_SIGNER=bankr` /
+  `CYBERDYNE_BANKR_WALLET=1`); needs a `bk_` Bankr Agent-API key from
+  `CYBERDYNE_BANKR_KEY` / `BANKR_API_KEY` / `~/.bankr/config.json`. USDC
+  (EIP-3009) works directly; Permit2 tokens (BNKR/GITLAWB) need a one-time
+  ERC-20→Permit2 approval from the Bankr wallet first, else fund them from a
+  local wallet. Not yet certified end-to-end on mainnet — the local path is the
+  proven default.
+
+The payer of record (and the reclaim right) belongs to whichever wallet signed.
+
 ## Get task / poll for submissions
 
 ```bash
