@@ -219,6 +219,13 @@ export async function bankrSiweProvision(opts = {}) {
     });
     if (!nonceRes.ok)
         throw new BankrApiError(nonceRes.status, "/cli/siwe/nonce", "nonce request failed");
+    // The nonce endpoint sets AWS load-balancer stickiness cookies (AWSALB…); the nonce is
+    // instance-local, so /cli/siwe/verify MUST carry them to reach the same backend — without
+    // this it intermittently fails "Nonce expired or already used" depending on LB routing.
+    const cookie = (typeof nonceRes.headers.getSetCookie === "function" ? nonceRes.headers.getSetCookie() : [])
+        .map((c) => c.split(";")[0])
+        .filter(Boolean)
+        .join("; ");
     const { nonce } = (await nonceRes.json());
     if (!nonce)
         throw new BankrApiError(200, "/cli/siwe/nonce", "no nonce in response");
@@ -239,7 +246,12 @@ export async function bankrSiweProvision(opts = {}) {
     const signature = await account.signMessage({ message });
     const verifyRes = await fetch(`${BANKR_API_URL}/cli/siwe/verify`, {
         method: "POST",
-        headers: { "content-type": "application/json", accept: "application/json", "user-agent": "cyberdyne-mcp" },
+        headers: {
+            "content-type": "application/json",
+            accept: "application/json",
+            "user-agent": "cyberdyne-mcp",
+            ...(cookie ? { cookie } : {}),
+        },
         body: JSON.stringify({
             message,
             signature,
