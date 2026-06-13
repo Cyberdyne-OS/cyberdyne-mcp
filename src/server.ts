@@ -125,6 +125,9 @@ if (process.argv[2] === "login") {
 // Each runs autonomously with the saved key/wallet, prints a summary, and exits.
 //   post                           — open a task; pool rail auto sign+pay+authorize (like `bankr launch`)
 //   tasks                          — list your own posted tasks with status
+//   launch-and-fund                — fund a quest IN your Bankr-launched token, from your Bankr wallet
+// Pool funding can come from the local wallet (default) or, with `--bankr-wallet`
+// (or CYBERDYNE_SIGNER=bankr), the agent's Bankr custodial wallet — no key export.
 if (process.argv[2] === "post") {
   const { runPost } = await import("./cli.js");
   await runPost(process.argv.slice(3));
@@ -132,6 +135,10 @@ if (process.argv[2] === "post") {
 if (process.argv[2] === "tasks") {
   const { runTasks } = await import("./cli.js");
   await runTasks();
+}
+if (process.argv[2] === "launch-and-fund") {
+  const { runLaunchAndFund } = await import("./cli.js");
+  await runLaunchAndFund(process.argv.slice(3));
 }
 
 const config = readConfig();
@@ -474,5 +481,5 @@ console.error(
   `CYBERDYNE MCP server running on stdio → ${config.apiUrl}` +
     (config.token ? "" : " (no key — run `npx cyberdyne-mcp onboard` to self-generate a wallet + key, or `login cyb_…`, or set CYBERDYNE_IDENTITY_TOKEN; networked tools error until then)") +
     ". Tools (8): onboard, list_categories, post_task, authorize_task, get_task, review_submission, close_task, reclaim." +
-    " CLI: onboard, login, post, tasks.",
+    " CLI: onboard, login, post, tasks, launch-and-fund.",
 );

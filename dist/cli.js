@@ -39,6 +39,10 @@ export function parseFlags(argv) {
     }
     return out;
 }
+/** A flag is "set" when present and not explicitly disabled (bare `--flag` ⇒ "true"). */
+function isFlagSet(v) {
+    return v != null && v !== "false" && v !== "0";
+}
 function client() {
     return new CyberdyneClient(readConfig());
 }
@@ -124,23 +128,47 @@ export async function runPost(argv) {
             console.error(`\n✓ Task ${taskId} is open. Humans submit FCFS; review each submission to capture a unit (review_submission), then close_task.`);
             process.exit(0);
         }
-        // POOL rail — the autonomous `bankr launch` path. Sign the budget with the saved
-        // wallet, pay the separate deploy fee, then authorize. Reuses evm-signer (the
-        // exact logic the authorize_task MCP tool uses).
-        const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
-        if (!hasEvmKey()) {
-            fail("pool rail needs a signing wallet, but none is saved. Run `npx -y cyberdyne-mcp onboard` " +
-                `(the task ${taskId} is posted but not yet funded).`);
-        }
+        // POOL rail — the autonomous `bankr launch` path. Sign the budget, pay the separate
+        // deploy fee, then authorize. Two signers:
+        //   default      — the saved/local wallet (evm-signer.ts, the certified path).
+        //   --bankr-wallet (or env CYBERDYNE_SIGNER=bankr / CYBERDYNE_BANKR_WALLET=1) — fund
+        //     from the agent's Bankr custodial wallet, no key export (bankr-signer.ts, BETA).
+        const bankrMode = isFlagSet(f["bankr-wallet"]) ||
+            /^(1|true|bankr)$/i.test(process.env.CYBERDYNE_SIGNER ?? "") ||
+            process.env.CYBERDYNE_BANKR_WALLET === "1";
         const requirements = res.authIntent.requirements ?? res.authIntent;
-        console.error("→ signing the budget authorization…");
-        const signedPayment = await signAuthCapture(requirements);
         const fee = res.deployFee;
         // `fee.amount` is in the FEE TOKEN's own units; for non-USDC tokens `fee.usd` is the
         // token amount (no oracle), so DON'T render it as a "$" — just show the token amount.
-        console.error(`→ paying the deploy fee (${fee.amount} of ${String(fee.token).slice(0, 10)}…) from your wallet…`);
-        const feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
-        console.error(`  ✓ fee paid — ${feeTx}`);
+        const feeLabel = `${fee.amount} of ${String(fee.token).slice(0, 10)}…`;
+        let signedPayment;
+        let feeTx;
+        if (bankrMode) {
+            const { hasBankrSigner, bankrSignAuthCapture, bankrPayDeployFee, bankrSignerAddress } = await import("./bankr-signer.js");
+            if (!hasBankrSigner()) {
+                fail("--bankr-wallet needs a Bankr key. Set CYBERDYNE_BANKR_KEY or BANKR_API_KEY (a bk_… Agent " +
+                    `API key), or put it in ~/.bankr/config.json (the task ${taskId} is posted but not yet funded).`);
+            }
+            const addr = await bankrSignerAddress();
+            console.error(`→ funding from your Bankr wallet ${addr} (no key export)…`);
+            console.error("→ signing the budget authorization via Bankr (/wallet/sign)…");
+            signedPayment = await bankrSignAuthCapture(requirements);
+            console.error(`→ paying the deploy fee (${feeLabel}) via Bankr (/wallet/transfer)…`);
+            feeTx = await bankrPayDeployFee({ amount: fee.amount, recipient: fee.recipient, token: fee.token });
+            console.error(`  ✓ fee paid — ${feeTx}`);
+        }
+        else {
+            const { hasEvmKey, signAuthCapture, payDeployFee } = await import("./evm-signer.js");
+            if (!hasEvmKey()) {
+                fail("pool rail needs a signing wallet, but none is saved. Run `npx -y cyberdyne-mcp onboard` " +
+                    `(the task ${taskId} is posted but not yet funded). Or fund from your Bankr wallet with --bankr-wallet.`);
+            }
+            console.error("→ signing the budget authorization…");
+            signedPayment = await signAuthCapture(requirements);
+            console.error(`→ paying the deploy fee (${feeLabel}) from your wallet…`);
+            feeTx = await payDeployFee({ amount: fee.amount, decimals: fee.decimals, recipient: fee.recipient, token: fee.token });
+            console.error(`  ✓ fee paid — ${feeTx}`);
+        }
         console.error("→ freezing the budget (authorize)…");
         const authed = await c.rest("POST", `/api/tasks/${encodeURIComponent(taskId)}/authorize`, { body: { signedPayment, fee_tx_hash: feeTx } });
         const escrow = authed.task?.escrow_status ?? "held";
@@ -151,6 +179,26 @@ export async function runPost(argv) {
     catch (e) {
         fail(describe(e));
     }
+}
+// ── launch-and-fund (community loop) ─────────────────────────────────────────
+// Orchestrate the Bankr launch → grow loop: fund an engagement quest IN your own
+// Bankr-launched community token, paid to verified humans. CYBERDYNE NEVER launches a
+// token — you launch yours on Bankr first (e.g. Clanker via the Bankr app/agent), then
+// pass its contract address here. Funds from your Bankr wallet by default (no key export);
+// otherwise identical to `post`. Reuses runPost end-to-end.
+export async function runLaunchAndFund(argv) {
+    const f = parseFlags(argv);
+    const tok = (f.token ?? "").trim();
+    if (!tok) {
+        fail("launch-and-fund needs --token <0xADDRESS | SYMBOL> — the Bankr-launched token to fund the quest in.\n" +
+            "  Launch your community token on Bankr first (e.g. Clanker via the Bankr app/agent), then pass its\n" +
+            "  contract address here. CYBERDYNE never launches a token; it orchestrates funding quests in YOURS.");
+    }
+    console.error("launch-and-fund — funding an engagement quest in your Bankr-launched token, paid to verified humans.");
+    console.error("  (CYBERDYNE does not launch tokens. Launch yours on Bankr first; this funds quests in it.)");
+    // Default to the Bankr-wallet signer (no key export); honor an explicit --bankr-wallet=false.
+    const next = "bankr-wallet" in f ? argv : [...argv, "--bankr-wallet"];
+    await runPost(next);
 }
 // ── tasks ─────────────────────────────────────────────────────────────────
 // List the agent's own posted tasks (GET /api/tasks?mine=posted — works with the

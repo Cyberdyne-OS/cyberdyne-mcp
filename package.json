@@ -30,7 +30,9 @@
     "escrow",
     "bounty",
     "cyberdyne",
-    "get-paid-by-ai"
+    "get-paid-by-ai",
+    "bankr",
+    "bnkr"
   ],
   "bin": {
     "cyberdyne-mcp": "dist/server.js"
@@ -38,6 +40,7 @@
   "files": [
     "dist",
     "src",
+    "examples",
     "llms.txt",
     "README.md",
     "LICENSE",

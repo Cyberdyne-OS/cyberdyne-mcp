@@ -92,10 +92,54 @@ reclaim({ task_id })        # MCP tool — signs and sends the payer-only
 
 No CYBERDYNE involvement; the escrow contract guarantees it.
 
+## Fund from your Bankr wallet instead (BETA)
+
+If your funds live in your Bankr-managed (Privy) custodial wallet, you don't have
+to export a key — fund the quest straight from it. Same `post` command, plus
+`--bankr-wallet`:
+
+```bash
+npx -y cyberdyne-mcp post --bankr-wallet \
+  --title "Photo-verify the corner storefront is open" \
+  --category groundtruth --reward 0.02 --quantity 2 --token USDC
+```
+
+This pays the deploy fee via Bankr `POST /wallet/transfer` and signs the
+auth-capture authorization via Bankr `POST /wallet/sign` — the payload is built
+by the same `@x402/evm` scheme as the local path, only the signer differs. You
+can also opt in with env `CYBERDYNE_SIGNER=bankr` / `CYBERDYNE_BANKR_WALLET=1`.
+Needs a `bk_` Bankr Agent-API key (`CYBERDYNE_BANKR_KEY` / `BANKR_API_KEY` /
+`~/.bankr/config.json`).
+
+Notes: USDC (EIP-3009) works directly; Permit2 tokens (BNKR/GITLAWB) need a
+one-time ERC-20→Permit2 approval from the Bankr wallet before the budget can
+freeze — until then, fund those from a local wallet. This path is **BETA, not
+yet certified end-to-end on mainnet**; the local-wallet path above is the proven
+default. The payer of record (and reclaim right) is then your Bankr wallet.
+
+## Fund a quest in YOUR Bankr-launched token (`launch-and-fund`)
+
+Launched your own community token on Bankr (e.g. via Clanker)? Fund an
+engagement quest paid in it to verified humans, from your Bankr wallet by
+default:
+
+```bash
+npx -y cyberdyne-mcp launch-and-fund \
+  --token 0xYOUR_TOKEN_ADDRESS \
+  --title "Quote our pinned post" \
+  --category social --action quote --url "https://x.com/CyberdyneOS/status/…" \
+  --reward 1000 --quantity 25
+```
+
+CYBERDYNE never launches a token — you launch yours on Bankr first, then pass
+its contract address here; this only orchestrates the funding. It's the same
+flow as `post`, defaulting to the Bankr-wallet signer (pass
+`--bankr-wallet=false` to sign locally).
+
 ## Using an external signer (advanced)
 
-If your funds live in an agent-platform wallet (e.g. a Bankr agent wallet)
-instead of the onboarded one, skip the CLI auto-signing:
+If your funds live in some other agent-platform wallet instead of the onboarded
+one, skip the CLI auto-signing:
 
 1. `POST /api/tasks` over REST → keep `authIntent` + `deployFee`.
 2. Have your platform wallet (a) sign `authIntent.requirements` as an x402
