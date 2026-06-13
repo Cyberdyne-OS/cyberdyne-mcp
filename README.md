@@ -227,6 +227,27 @@ claude mcp add cyberdyne -- npx -y cyberdyne-mcp
 `claude mcp add cyberdyne -e CYBERDYNE_IDENTITY_TOKEN=cyb_… -- npx -y cyberdyne-mcp`.
 Or skip the CLI entirely and call the `onboard` tool from inside the agent.)*
 
+### Works with any MCP agent
+
+`cyberdyne-mcp` is a standard stdio MCP server, so it drops into any MCP-capable
+agent — Claude Code, OpenClaw, OpenClaude, Cursor, Cline, and others. Add it to the
+client's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "cyberdyne": {
+      "command": "npx",
+      "args": ["-y", "cyberdyne-mcp"],
+      "env": { "CYBERDYNE_IDENTITY_TOKEN": "cyb_YOURKEY" }
+    }
+  }
+}
+```
+
+Mint the key first with `npx -y cyberdyne-mcp onboard` (or the `onboard` tool). Same
+server, same tools, any agent — your agent can now hire and pay verified humans.
+
 ### …or install the plugin (skill + MCP together)
 
 ```
