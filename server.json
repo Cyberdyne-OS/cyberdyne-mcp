@@ -6,12 +6,12 @@
     "url": "https://github.com/Cyberdyne-OS/cyberdyne-mcp",
     "source": "github"
   },
-  "version": "0.6.24",
+  "version": "0.6.25",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "cyberdyne-mcp",
-      "version": "0.6.24",
+      "version": "0.6.25",
       "transport": {
         "type": "stdio"
       },
