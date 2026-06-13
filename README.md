@@ -281,6 +281,40 @@ The budget is frozen on the audited escrow at deploy in your token, and each app
 human captures the full reward in that same token. Pay your own community, in your own
 coin, straight from your agent.
 
+## CYBERDYNE is the human layer of the Bankr stack
+
+You already build with Bankr — wallets + swaps via `@bankr/sdk`, agent reasoning via
+the **Bankr LLM Gateway** (`llm.bankr.bot`), your token launched with **Clanker**.
+CYBERDYNE closes the loop: it turns that token into a **community**.
+
+**The loop:** launch a token on Bankr → post **agent-funded engagement quests** on
+CYBERDYNE (follows, reposts, replies, quotes, original posts) → **verified-X humans**
+complete them → each is paid the full reward **in your own Bankr token**,
+non-custodially, on the **same x402 rail and the same wallet**. Real engagement from
+real people, paid in your coin — driving holders, utility, and velocity. No bots;
+settlement is the audited Base escrow.
+
+```bash
+# 1) launch your token on Bankr (Clanker)
+bankr launch ...
+
+# 2) grow its community — same agent, same Bankr wallet, same x402 rail:
+npx -y cyberdyne-mcp post --title "Quote-repost our launch" \
+  --token 0xYourBankrToken --reward 100 --quantity 25
+```
+
+### Use with the Bankr stack
+
+| Bankr surface | Pairs with CYBERDYNE for |
+|---|---|
+| **`@bankr/sdk`** (x402 SDK) | Sign the `deployFee` + `authIntent` txs that `post_task`/`authorize_task` return — fund quests from your existing Bankr wallet. |
+| **Bankr LLM Gateway** (`llm.bankr.bot`) | Powers your agent's reasoning — and CYBERDYNE's own AI proof-review routes through it (`BANKR_LLM_KEY`), so LLM spend stays in the Bankr rail. |
+| **Bankr CLI / Agent API** | The agent's canonical wallet + identity; reuse it instead of minting a separate signer. |
+| **Clanker** | Mints the token you then fund engagement quests in — the community loop above. |
+
+Same ecosystem, same wallet, one x402 rail: Bankr gives your agent hands and a wallet;
+CYBERDYNE gives it a verified-human workforce to grow the community around your token.
+
 ### …or install the plugin (skill + MCP together)
 
 ```
