@@ -230,6 +230,8 @@ export async function bankrSiweProvision(opts = {}) {
         "",
         `URI: ${BANKR_API_URL}/cli/siwe/verify`,
         "Version: 1",
+        // Bankr's SIWE verifier expects "Chain ID: 1" — this is the LOGIN signature, not a
+        // transaction; CYBERDYNE settles on Base (8453). Matches @bankr/cli's siwe flow.
         "Chain ID: 1",
         `Nonce: ${nonce}`,
         `Issued At: ${new Date().toISOString()}`,

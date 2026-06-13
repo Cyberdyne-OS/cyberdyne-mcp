@@ -49,6 +49,8 @@ export async function bankrAccount(key) {
     const address = getAddress(await bankrWalletAddress(bk));
     return toAccount({
         address,
+        // viem passes the full EIP-712 definition { domain, types, primaryType, message };
+        // we forward it verbatim to Bankr's eth_signTypedData_v4 signer (correct shape).
         async signTypedData(typedData) {
             return bankrSignTypedData(typedData, bk);
         },
@@ -88,10 +90,12 @@ async function assertPermit2Ready(requirements, owner) {
         return 0n;
     } })();
     const pub = createPublicClient({ chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    if (need === 0n)
+        return; // nothing to freeze → no approval needed
     const allowance = (await pub.readContract({
         address: getAddress(token), abi: ERC20_ALLOWANCE_ABI, functionName: "allowance", args: [getAddress(owner), PERMIT2_ADDRESS],
     }));
-    if (allowance >= need && allowance > 0n)
+    if (allowance >= need)
         return;
     throw new Error(`Bankr-wallet funding for this Permit2 token (${token}) needs a one-time ERC-20→Permit2 approval ` +
         `from your Bankr wallet (${owner}) that isn't in place yet. Approve Permit2 (spender ` +
@@ -116,12 +120,23 @@ export async function bankrSignAuthCapture(requirements, key) {
 }
 /**
  * Pay the SEPARATE deploy fee from the Bankr custodial wallet via /wallet/transfer.
- * `amount` is the fee in the FEE TOKEN's own (human-readable) units, as post_task pins it.
- * Returns the tx hash to pass to authorize as `fee_tx_hash`.
+ * `amount` is the fee in the FEE TOKEN's own (human-readable) units, as post_task pins it
+ * (Bankr resolves on-chain decimals server-side from the token address). Returns the tx
+ * hash to pass to authorize as `fee_tx_hash`.
+ *
+ * Like the local payDeployFee, we WAIT for on-chain inclusion (2 confs) + a success status
+ * before returning: authorize runs immediately after and the platform's verifyFeePayment
+ * reads the tx on-chain, so returning an un-mined hash would make authorize fail spuriously.
  */
 export async function bankrPayDeployFee(fee, key) {
     if (!isAddress(fee.token) || !isAddress(fee.recipient)) {
         throw new Error("deploy_fee.token/recipient is not a valid address — pass the full deployFee object from post_task");
     }
-    return bankrTransfer({ tokenAddress: getAddress(fee.token), recipientAddress: getAddress(fee.recipient), amount: fee.amount, isNativeToken: false, chain: "base" }, key);
+    const hash = await bankrTransfer({ tokenAddress: getAddress(fee.token), recipientAddress: getAddress(fee.recipient), amount: fee.amount, isNativeToken: false, chain: "base" }, key);
+    const pub = createPublicClient({ chain: chain(), transport: http(process.env.CYBERDYNE_RPC_URL) });
+    const receipt = await pub.waitForTransactionReceipt({ hash: hash, confirmations: 2 });
+    if (receipt.status !== "success") {
+        throw new Error(`Bankr deploy-fee tx ${hash} reverted on-chain — fee NOT paid (no budget will freeze)`);
+    }
+    return hash;
 }

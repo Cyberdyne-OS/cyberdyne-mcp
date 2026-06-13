@@ -54,12 +54,6 @@ function hasKey(): boolean {
 
 const NO_KEY = "No CYBERDYNE key saved. Run:  npx -y cyberdyne-mcp onboard";
 
-/** Format a USD-ish numeric value (handles string/number/null) to 2dp. */
-function usd(v: unknown): string {
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? `$${n.toFixed(2)}` : "—";
-}
-
 function fail(msg: string): never {
   console.error(`✗ ${msg}`);
   process.exit(1);
