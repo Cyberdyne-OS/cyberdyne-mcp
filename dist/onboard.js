@@ -180,8 +180,9 @@ export async function onboard(env = process.env, opts = {}) {
         }
     }
     const jar = new Map();
-    // 1. nonce
-    const nonceRes = await fetch(`${apiUrl}/api/auth/siwe/nonce`, { headers: { accept: "application/json" } });
+    // 1. nonce — the platform binds the nonce to the signer address (hardening), so the
+    //    nonce endpoint REQUIRES ?address=<wallet>; omitting it returns 400.
+    const nonceRes = await fetch(`${apiUrl}/api/auth/siwe/nonce?address=${address}`, { headers: { accept: "application/json" } });
     if (!nonceRes.ok)
         throw new Error(`GET /api/auth/siwe/nonce → ${nonceRes.status}`);
     collectCookies(nonceRes, jar); // carry siwe-nonce to verify
