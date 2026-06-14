@@ -117,7 +117,7 @@ const ERC20_PERMIT2_ABI = [
     { name: "approve", type: "function", stateMutability: "nonpayable", inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
 ];
 /**
- * Permit2-method tokens (BNKR / GITLAWB / any non-EIP-3009 ERC-20) require a ONE-TIME
+ * Permit2-method tokens (BNKR / any non-EIP-3009 ERC-20) require a ONE-TIME
  * ERC-20 approval to the canonical Permit2 contract before the operator's on-chain
  * `authorize` can pull the frozen budget. The agent signs the Permit2 transfer
  * authorization, but the underlying ERC-20→Permit2 allowance is a SEPARATE on-chain tx

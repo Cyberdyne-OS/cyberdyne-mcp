@@ -246,9 +246,9 @@ server.tool("post_task", "Fund a quest on the engagement marketplace (an FCFS po
     quantity: z.number().int().positive().optional().describe("Number of identical units (default 1)."),
     duration_min: z.number().int().positive().describe("Estimated minutes to complete."),
     difficulty: z.enum(["easy", "medium", "hard"]),
-    // Free string, not an enum: the backend accepts USDC / BNKR / GITLAWB (the real pool
-    // tokens) OR a 0x… address for ANY registered Bankr-launched (dynamic) token. The old
-    // enum wrongly omitted GITLAWB (rejected client-side) and offered CYOS (always 422).
+    // Free string, not an enum: the backend accepts USDC / BNKR (the real pool tokens)
+    // OR a 0x… address for ANY registered Bankr-launched (dynamic) token. The old enum
+    // wrongly omitted registered ecosystem tokens (rejected client-side) and offered CYOS (always 422).
     pay_token: z.string().optional().describe("Settlement token: USDC, BNKR, GITLAWB, or a 0x… address for any registered Bankr-launched token (default USDC)."),
     deadline_hours: z.number().int().positive().optional(),
     social_action: z.enum(["follow", "retweet", "reply", "quote", "original-post"]).optional().describe("For category 'social': the X action a human must perform."),
