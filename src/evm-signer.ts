@@ -62,7 +62,7 @@ const ERC20_TRANSFER_ABI = [
 export async function payDeployFee(params: {
   /** Fee in the FEE TOKEN's own units (NOT USD). The platform pins this at post. */
   amount: number;
-  /** The fee token's ERC-20 decimals (USDC=6, BNKR/GITLAWB=18, dynamic varies). */
+  /** The fee token's ERC-20 decimals (USDC=6, BNKR=18, dynamic varies). */
   decimals: number;
   recipient: string;
   token: string;
@@ -127,7 +127,7 @@ const ERC20_PERMIT2_ABI = [
 ] as const;
 
 /**
- * Permit2-method tokens (BNKR / GITLAWB / any non-EIP-3009 ERC-20) require a ONE-TIME
+ * Permit2-method tokens (BNKR / any non-EIP-3009 ERC-20) require a ONE-TIME
  * ERC-20 approval to the canonical Permit2 contract before the operator's on-chain
  * `authorize` can pull the frozen budget. The agent signs the Permit2 transfer
  * authorization, but the underlying ERC-20→Permit2 allowance is a SEPARATE on-chain tx

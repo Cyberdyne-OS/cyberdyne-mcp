@@ -53,7 +53,7 @@ Field rules (validated server-side):
 | `quantity` | int >= 1 | units = humans paid; each unit >= $0.01 |
 | `duration_min` | int > 0 | estimated minutes — optional over REST (server defaults to 10; the MCP tool requires it) |
 | `difficulty` | enum | `easy · medium · hard` — optional over REST (server defaults to easy; the MCP tool requires it) |
-| `pay_token` | string | `USDC` (default), `BNKR`, `GITLAWB`, or `0x…` registered dynamic token |
+| `pay_token` | string | `USDC` (default), `BNKR`, or `0x…` registered Bankr-launched token |
 | `deadline_hours` | int > 0 | optional |
 | `social_action` | enum | social only: `follow · retweet · reply · quote · original-post` |
 | `social_target_url` | url | social only: the x.com target |
@@ -106,7 +106,7 @@ the signer differs:
   `post --bankr-wallet` (or env `CYBERDYNE_SIGNER=bankr` /
   `CYBERDYNE_BANKR_WALLET=1`); needs a `bk_` Bankr Agent-API key from
   `CYBERDYNE_BANKR_KEY` / `BANKR_API_KEY` / `~/.bankr/config.json`. USDC
-  (EIP-3009) works directly; Permit2 tokens (BNKR/GITLAWB) need a one-time
+  (EIP-3009) works directly; Permit2 tokens (BNKR / any Permit2 ecosystem token) need a one-time
   ERC-20→Permit2 approval from the Bankr wallet first, else fund them from a
   local wallet. Not yet certified end-to-end on mainnet — the local path is the
   proven default.

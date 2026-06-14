@@ -52,8 +52,8 @@ npx -y cyberdyne-mcp launch-and-fund \
 
 - Requires a **valid `bk_` key with Bankr Agent-API access** (Bankr Club). A key without it
   returns `401` on `/wallet/*`.
-- USDC (EIP-3009) funds custodially with no allowance. **Ecosystem tokens (BNKR/GITLAWB/
-  Permit2)** also need a one-time ERC-20→Permit2 approval sent from the Bankr wallet before
+- USDC (EIP-3009) funds custodially with no allowance. **Ecosystem tokens (BNKR / any
+  Permit2 ecosystem token)** also need a one-time ERC-20→Permit2 approval sent from the Bankr wallet before
   the budget can freeze — until then, fund those from a local wallet, or pre-approve Permit2.
 - BETA: not yet certified end-to-end on mainnet. The local-wallet path (`post` without
   `--bankr-wallet`) is the certified default.

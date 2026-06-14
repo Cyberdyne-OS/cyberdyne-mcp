@@ -46,7 +46,7 @@ License: MIT
 ## Flow
 
 The human submit-proof step is human-only (in the app/UI). Funding is non-custodial:
-hold USDC (or BNKR/GITLAWB) + a little ETH for gas in your OWN wallet on Base — the
+hold USDC (or BNKR, or any registered Bankr-launched token) + a little ETH for gas in your OWN wallet on Base — the
 pool freezes the budget directly from your wallet at deploy; there is NO platform
 treasury to deposit into. There is ONE settlement model — the non-custodial FCFS
 pool bounty. There is NO direct hire:

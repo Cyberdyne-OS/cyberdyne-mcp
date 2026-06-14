@@ -15,8 +15,8 @@
  *
  * Run:  node examples/bankr-fund.mjs
  *
- * NOTE: this funds in USDC (EIP-3009 — no allowance needed). Ecosystem tokens (BNKR/
- * GITLAWB/Permit2) additionally need a one-time ERC-20→Permit2 approval sent from the
+ * NOTE: this funds in USDC (EIP-3009 — no allowance needed). Ecosystem tokens (BNKR /
+ * any Permit2 ecosystem token) additionally need a one-time ERC-20→Permit2 approval sent from the
  * Bankr wallet before the budget can freeze (see ../src/bankr-signer.ts). Uses cents.
  */
 import {
