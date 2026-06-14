@@ -84,7 +84,11 @@ async function call<T>(
       ...authHeaders(key),
       ...(opts.body !== undefined ? { "content-type": "application/json" } : {}),
     },
-    ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+    // BigInt-safe: EIP-712 typed data (from @x402/evm) carries uint values as BigInt,
+    // which plain JSON.stringify can't serialize — emit them as decimal strings.
+    ...(opts.body !== undefined
+      ? { body: JSON.stringify(opts.body, (_k, v) => (typeof v === "bigint" ? v.toString() : v)) }
+      : {}),
     signal: AbortSignal.timeout(20_000),
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -98,10 +102,12 @@ async function call<T>(
 // ── wallet ──────────────────────────────────────────────────────────────────
 
 export interface BankrWalletMe {
-  /** The agent's canonical Bankr-managed (Privy) wallet address on EVM chains. */
+  /** The agent's canonical Bankr wallet address on EVM chains. */
   walletAddress?: string;
   evmAddress?: string;
   address?: string;
+  /** Bankr's actual /wallet/me shape: per-chain wallets, e.g. [{chain:"evm",address}]. */
+  wallets?: Array<{ chain?: string; address?: string }>;
   [k: string]: unknown;
 }
 
@@ -113,7 +119,12 @@ export async function bankrWalletMe(key?: string): Promise<BankrWalletMe> {
 /** Resolve the canonical Bankr EVM wallet address (walletAddress | evmAddress | address). */
 export async function bankrWalletAddress(key?: string): Promise<string> {
   const me = await bankrWalletMe(key);
-  const addr = me.walletAddress || me.evmAddress || me.address;
+  // Bankr's /wallet/me returns wallets:[{chain:"evm",address},{chain:"solana",…}] — read the
+  // EVM entry — with top-level walletAddress/evmAddress/address as fallbacks.
+  const fromArr = Array.isArray(me.wallets)
+    ? me.wallets.find((w) => String(w?.chain).toLowerCase() === "evm")?.address
+    : undefined;
+  const addr = me.walletAddress || me.evmAddress || me.address || fromArr;
   if (typeof addr !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
     throw new BankrApiError(200, "/wallet/me", "no EVM wallet address in response");
   }

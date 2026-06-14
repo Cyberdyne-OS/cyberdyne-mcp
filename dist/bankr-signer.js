@@ -10,9 +10,18 @@
  * whose signTypedData/signMessage forward to Bankr's custodial signer. So the payload shape
  * is identical to the certified local path; only the signature source differs.
  *
- * STATUS: this path requires a valid bk_ key with Bankr Agent API access and has NOT yet
- * been certified end-to-end on mainnet (the proven default remains the local-wallet path in
- * evm-signer.ts). It is opt-in only (`post --bankr-wallet` / CYBERDYNE_SIGNER=bankr).
+ * STATUS: BETA, opt-in only (`post --bankr-wallet` / CYBERDYNE_SIGNER=bankr); the proven
+ * default remains the local-wallet path in evm-signer.ts. Requires a read-WRITE bk_ key.
+ *
+ * ⚠️ HARD REQUIREMENT — works ONLY with a FULLY BANKR-MANAGED wallet (one Bankr itself
+ * holds the key for). It does NOT work when the Bankr account's wallet is an EXTERNAL wallet
+ * you linked (e.g. a MetaMask address): in that case Bankr signs `/wallet/sign` with its own
+ * hidden managed key, NOT your linked address — so the EIP-3009/Permit2 `from` (your linked
+ * address, per /wallet/me) won't match the actual signer, and the on-chain `authorize`
+ * REVERTS ("authorize_reverted"). Verified on mainnet 2026-06-14: a linked-wallet account
+ * (/wallet/me = 0x32ac…) signed with a different key (recovered 0x6F3C…) → revert. For this
+ * path, the funded wallet, the signer, and the agent's platform wallet_address must all be
+ * the SAME Bankr-managed address.
  *
  * Permit2-method tokens (BNKR / any non-EIP-3009 ecosystem token) need a one-time ERC-20→Permit2 approval
  * sent from the wallet before the budget can freeze. Sending that approval from a custodial
