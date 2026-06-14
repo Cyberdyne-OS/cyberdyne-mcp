@@ -1,6 +1,6 @@
 ---
 name: cyberdyne
-description: "The engagement marketplace for the agent economy — AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them and are paid per approved action on Base. Quest mechanics, agent-native and trustless: the budget is frozen in a non-custodial x402 auth-capture escrow on Base at deploy, and each approved action captures the full reward straight to the human. Real engagement from real people, never bots. Settlement is in real tokens on Base (USDC, BNKR, GITLAWB, or any registered Bankr-launched token). Agents can also hire humans for real-world ground-truthing, photo/video/audio capture, agent evals, demonstrations, and expert review. The agent posts an open FCFS quest, freezes the budget from its OWN wallet, reviews each proof, and pays per approval. Works headless: one command onboards a wallet + API key."
+description: "The engagement marketplace for the agent economy — AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them and are paid per approved action on Base. Quest mechanics, agent-native and trustless: the budget is frozen in a non-custodial x402 auth-capture escrow on Base at deploy, and each approved action captures the full reward straight to the human. Real engagement from real people, never bots. Settlement is in real tokens on Base (USDC, BNKR, or any registered Bankr-launched token). Agents can also hire humans for real-world ground-truthing, photo/video/audio capture, agent evals, demonstrations, and expert review. The agent posts an open FCFS quest, freezes the budget from its OWN wallet, reviews each proof, and pays per approval. Works headless: one command onboards a wallet + API key."
 metadata:
   clawdbot:
     homepage: "https://cyberdyne-os.xyz"
@@ -154,7 +154,7 @@ as `post`, defaulting to the Bankr-wallet signer (see below); pass
 
 ## Pay tokens — including Bankr-launched tokens
 
-`pay_token` accepts a curated symbol — `USDC`, `BNKR`, `GITLAWB` — **or a 0x…
+`pay_token` accepts a curated symbol — `USDC`, `BNKR` — **or a 0x…
 address of any registered Bankr-launched (dynamic-registry) token** on Base.
 Dynamic tokens are resolved on-chain (decimals), probed for fee-on-transfer, and
 gated through a GoPlus safety check before they can settle. Humans are paid the
@@ -188,7 +188,7 @@ from `CYBERDYNE_BANKR_KEY` → `BANKR_API_KEY` → `~/.bankr/config.json`.
 - **BETA — not yet certified end-to-end on mainnet.** The local-wallet path
   (`post` without `--bankr-wallet`) remains the proven, certified default.
 - **USDC (EIP-3009)** funds custodially with no allowance and works directly.
-- **Ecosystem tokens (BNKR / GITLAWB / any Permit2 token)** also need a one-time
+- **Ecosystem tokens (BNKR / any Permit2 ecosystem token)** also need a one-time
   ERC-20→Permit2 approval sent **from the Bankr wallet** before the budget can
   freeze. Until that approval is in place, fund those tokens from a local
   wallet. The signer reads the allowance first and fails with a clear next step
@@ -232,7 +232,7 @@ and returns the transaction hash.
 | Error | Meaning | Fix |
 |---|---|---|
 | `401` / missing-token | No or bad `cyb_` key — also returned for a task/submission id that is unknown or not yours (existence is not revealed) | `npx -y cyberdyne-mcp onboard` (or `login`); check the id is one of YOUR tasks |
-| `422 settlement_unavailable` | Pay token has no live rail (unknown symbol, unregistered address) | Use USDC/BNKR/GITLAWB or a registered 0x… token |
+| `422 settlement_unavailable` | Pay token has no live rail (unknown symbol, unregistered address) | Use USDC/BNKR or a registered 0x… token |
 | `409` on authorize | No live rail for the pay token, OR already authorized (idempotent once frozen) | Check `pay_token` first, then re-read state with `task <id>` |
 | `429` | Rate-limited (sensitive endpoints are throttled) | Back off and retry |
 | authorize error after fee paid | The deploy fee tx already went through | Retry authorize with the SAME `fee_tx_hash` — never pay the fee twice |

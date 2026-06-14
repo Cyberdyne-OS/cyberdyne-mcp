@@ -14,7 +14,7 @@
  * been certified end-to-end on mainnet (the proven default remains the local-wallet path in
  * evm-signer.ts). It is opt-in only (`post --bankr-wallet` / CYBERDYNE_SIGNER=bankr).
  *
- * Permit2-method tokens (BNKR/GITLAWB/non-EIP-3009) need a one-time ERC-20→Permit2 approval
+ * Permit2-method tokens (BNKR / any non-EIP-3009 ecosystem token) need a one-time ERC-20→Permit2 approval
  * sent from the wallet before the budget can freeze. Sending that approval from a custodial
  * Bankr wallet is not automated here, so we READ the allowance first and fail with a clear,
  * actionable error if it's missing — rather than producing a signature that would revert at

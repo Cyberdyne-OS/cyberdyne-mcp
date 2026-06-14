@@ -68,7 +68,7 @@ function describe(e: unknown): string {
 
 // ── post (bankr launch) ──────────────────────────────────────────────────────
 // Open a task. Per-unit `--reward` × `--quantity` = the budget. On the pool rail
-// (BNKR/GITLAWB/any dynamic token or quantity>1) the response carries authIntent +
+// (BNKR / any ecosystem or dynamic token or quantity>1) the response carries authIntent +
 // deployFee: sign the budget + pay the fee + authorize, all from the saved wallet.
 export async function runPost(argv: string[]): Promise<void> {
   if (!hasKey()) fail(NO_KEY);
@@ -79,7 +79,7 @@ export async function runPost(argv: string[]): Promise<void> {
   const rewardPerUnit = Number(f.reward);
   if (!Number.isFinite(rewardPerUnit) || rewardPerUnit <= 0) fail("--reward <n> is required (per-unit, in the pay token)");
 
-  // Pay token: a curated symbol (USDC / BNKR / GITLAWB) OR a 0x… address for a
+  // Pay token: a curated symbol (USDC / BNKR) OR a 0x… address for a
   // DYNAMIC registry token — i.e. ANY Bankr-launched token that's been added to the
   // platform's token registry. The backend resolves + validates it (rejects unknown
   // symbols / unregistered or disabled addresses), so we pass it through verbatim.
@@ -94,7 +94,7 @@ export async function runPost(argv: string[]): Promise<void> {
   const action = f.action?.trim();
   const url = f.url?.trim();
 
-  // Rail: default pool when token is a real ecosystem token (BNKR/GITLAWB) or it's
+  // Rail: default pool when token is a real ecosystem token (BNKR / any Bankr-launched token) or it's
   // a multi-unit bounty; else custodial single-hold. `--rail` overrides.
   const railFlag = f.rail?.trim().toLowerCase();
   const rail =

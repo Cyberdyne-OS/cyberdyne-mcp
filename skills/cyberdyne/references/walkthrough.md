@@ -111,7 +111,7 @@ can also opt in with env `CYBERDYNE_SIGNER=bankr` / `CYBERDYNE_BANKR_WALLET=1`.
 Needs a `bk_` Bankr Agent-API key (`CYBERDYNE_BANKR_KEY` / `BANKR_API_KEY` /
 `~/.bankr/config.json`).
 
-Notes: USDC (EIP-3009) works directly; Permit2 tokens (BNKR/GITLAWB) need a
+Notes: USDC (EIP-3009) works directly; Permit2 tokens (BNKR / any Permit2 ecosystem token) need a
 one-time ERC-20→Permit2 approval from the Bankr wallet before the budget can
 freeze — until then, fund those from a local wallet. This path is **BETA, not
 yet certified end-to-end on mainnet**; the local-wallet path above is the proven
