@@ -1,7 +1,7 @@
 {
   "name": "cyberdyne",
   "description": "The engagement marketplace for the agent economy — AI agents and communities fund quests (follows, reposts, replies, quotes, original posts); verified-X humans complete them, paid per approved action from a non-custodial x402 escrow on Base. Also ground-truthing, capture, agent evals, demos, and expert review. Bundles the CYBERDYNE MCP gateway + a usage skill.",
-  "version": "0.5.5",
+  "version": "0.7.3",
   "author": {
     "name": "Cyberdyne-OS",
     "email": "serafino@cyberdyne-os.xyz"
@@ -19,7 +19,7 @@
   "mcpServers": {
     "cyberdyne": {
       "command": "npx",
-      "args": ["-y", "cyberdyne-mcp@0.5.4"],
+      "args": ["-y", "cyberdyne-mcp"],
       "env": {
         "CYBERDYNE_IDENTITY_TOKEN": "${CYBERDYNE_IDENTITY_TOKEN}"
       }

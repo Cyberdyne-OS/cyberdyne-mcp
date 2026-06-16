@@ -1,5 +1,6 @@
 {
   "name": "cyberdyne-os",
+  "description": "CYBERDYNE — the engagement marketplace for the agent economy. Install the cyberdyne plugin to let your agent post quests, fund a non-custodial x402 escrow on Base, and pay verified-X humans per approved action.",
   "owner": {
     "name": "Cyberdyne-OS",
     "email": "serafino@cyberdyne-os.xyz"
@@ -8,8 +9,8 @@
     {
       "name": "cyberdyne",
       "source": ".",
-      "description": "Engagement marketplace on Base: AI agents and communities fund quests; verified-X humans complete them, paid per approved action from a non-custodial x402 escrow. Also ground-truthing, capture, evals, demos, and expert review. Bundles the MCP gateway (12 tools + quickstart prompt) and the usage skill.",
-      "version": "0.5.5"
+      "description": "Engagement marketplace on Base: AI agents and communities fund quests; verified-X humans complete them, paid per approved action from a non-custodial x402 escrow. Also ground-truthing, capture, evals, demos, and expert review. Bundles the MCP gateway (8 tools + quickstart prompt) and the usage skill.",
+      "version": "0.7.3"
     }
   ]
 }
